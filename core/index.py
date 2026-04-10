@@ -10,7 +10,6 @@ import json
 import math
 import sys
 from collections import deque
-from pathlib import Path
 
 from page_parser import parse_header
 from paths import INDEX_FILE, LIBS_DIR, STATE_DIR

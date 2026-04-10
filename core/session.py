@@ -20,7 +20,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8
 if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-from paths import NXT_ROOT, PROJECT_ROOT, IS_SOURCE, STATE_DIR, DESIGN_DIR, LOGS_DIR, VERSION_FILE
+from paths import PROJECT_ROOT, IS_SOURCE, STATE_DIR, DESIGN_DIR, LOGS_DIR, VERSION_FILE
 from index import reindex
 from page_parser import parse_sections, parse_tp_row, STATUS_TODO, STATUS_WIP, STATE_FILE_PREFIX
 from feedback import init_error_handling

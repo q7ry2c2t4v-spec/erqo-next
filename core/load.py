@@ -8,7 +8,6 @@ UI 判定・docs 検索・関連ページ収集を行い、コンテキストを
 """
 
 import io
-import json
 import re
 import sys
 from pathlib import Path
