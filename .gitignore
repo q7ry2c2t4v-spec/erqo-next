@@ -3,4 +3,3 @@ __pycache__/
 .claude/skills/
 .claude/state/
 .claude/settings.local.json
-.git/COMMIT_MSG_TMP.txt

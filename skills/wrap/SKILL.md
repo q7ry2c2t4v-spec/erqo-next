@@ -129,8 +129,10 @@ python "{nxt}/core/index.py" reindex
 
 #### 5-3. コミットメッセージを一時ファイルに保存
 
-`Write` ツールで `.git/COMMIT_MSG_TMP.txt` を作成する（heredoc は **絶対に使わない**）。
+`Write` ツールで `.claude/state/commit_msg_tmp.txt` を作成する（heredoc は **絶対に使わない**）。
 このファイルは `.gitignore` 済みのため git に追跡されない。
+`.git/` 配下は Claude Code が sensitive file 扱いで bypassPermissions の例外になるため、
+一時ファイルは `.git/` の外に置く必要がある。
 
 #### 5-4. ステージング（明示的にファイル指定）
 
@@ -159,13 +161,13 @@ git restore --staged <想定外のファイル>
 #### 5-6. コミット
 
 ```bash
-git commit -F .git/COMMIT_MSG_TMP.txt
+git commit -F .claude/state/commit_msg_tmp.txt
 ```
 
 #### 5-7. 一時ファイル削除
 
 ```bash
-rm .git/COMMIT_MSG_TMP.txt
+rm .claude/state/commit_msg_tmp.txt
 ```
 
 ### 6. push しない
@@ -188,7 +190,7 @@ rm .git/COMMIT_MSG_TMP.txt
 
 1. **承認は 1 回だけ** — ログとコミットを別々に確認させない。両方まとめて提示する
 2. **ログ → コミットの順序厳守** — ログをコミットに含めるためログを先に保存する
-3. **heredoc 禁止** — コミットメッセージは必ず `Write` ツールで `.git/COMMIT_MSG_TMP.txt` に書き、`git commit -F` で渡す
+3. **heredoc 禁止** — コミットメッセージは必ず `Write` ツールで `.claude/state/commit_msg_tmp.txt` に書き、`git commit -F` で渡す
 4. **`git_ops.py commit` は使わない** — `git add` は `git` を直接呼ぶ。git_ops の commit にはフォールバックの罠がある
 5. **ステージング検証は必須** — `git status --short` で必ず確認し、想定外があれば `git restore --staged` で除外
 6. **push は別途承認** — `/wrap` は push しない
