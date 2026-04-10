@@ -3,3 +3,4 @@ __pycache__/
 .claude/skills/
 .claude/state/
 .claude/settings.local.json
+.commit_msg_tmp.txt
