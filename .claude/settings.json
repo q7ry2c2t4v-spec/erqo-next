@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/./core/session.py\"",
+            "timeout": 10,
+            "statusMessage": "プロジェクト情報を読み込み中..."
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/./core/session.py\" --compact",
+            "timeout": 10,
+            "statusMessage": "コンテキストを復元中..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/core/dev.py\" _sync",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

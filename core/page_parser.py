@@ -1,24 +1,17 @@
 """page_parser.py — ページフォーマット解析モジュール
 
 ページテキストからヘッダーメタデータとセクション構造を抽出する。
-TP テーブルのパース定数・関数もここで一元管理する。
+TP テーブルのパース関数もここで提供する。
+
+公開定数（TP_FILE_PATTERN, STATE_FILE_PREFIX, HISTORY_DIR_NAME, STATUS_*）は
+constants.py に集約されている。各モジュールは constants から直接 import すること。
 """
 
 import re
 from pathlib import Path
 
-# --- TP テーブル定数 ---
+# --- TP テーブル列インデックス（モジュール内部のみ） ---
 
-TP_FILE_PATTERN = "tp-*.md"
-STATE_FILE_PREFIX = "codi_"
-HISTORY_DIR_NAME = "history"
-
-# ステータス文字列
-STATUS_DONE = "完了"
-STATUS_TODO = "未着手"
-STATUS_WIP = "進行中"
-
-# 列インデックス
 _TP_COL_ID = 1
 _TP_COL_NAME = 2
 _TP_COL_DEPS = 3

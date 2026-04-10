@@ -19,7 +19,8 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 from paths import LIBS_DIR, IS_SOURCE, DESIGN_DIR, FEATURES_DIR, RULES_DIR
-from page_parser import parse_tp_row, parse_header, TP_FILE_PATTERN, HISTORY_DIR_NAME, find_section_dir
+from constants import TP_FILE_PATTERN, HISTORY_DIR_NAME
+from page_parser import parse_tp_row, parse_header, find_section_dir
 from index import collect as index_collect
 from docs import search as docs_search
 from feedback import init_error_handling

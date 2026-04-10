@@ -5,12 +5,14 @@
 ```
 .nxt-core/
 ├── core/          ← コアモジュール（全スクリプトの土台）
-│   ├── paths.py
+│   ├── constants.py   ← 固定値の一元管理
+│   ├── paths.py       ← パス定数（constants 由来）
 │   ├── feedback.py
 │   ├── page_parser.py
 │   ├── index.py
 │   ├── docs.py
-│   ├── install.py
+│   ├── install.py     ← プロジェクト用セットアップ
+│   ├── dev.py         ← 本体リポジトリ用セットアップ（IS_SOURCE 限定）
 │   ├── session.py
 │   ├── state.py
 │   ├── load.py
@@ -72,10 +74,23 @@
 
 ### install.py — セットアップ
 
+プロジェクト用。本体リポジトリでは `IS_SOURCE` ガードで止まる。
+
 | コマンド | 内容 |
 |---|---|
 | `python core/install.py` | 新規インストール (8ステップ) |
 | `python core/install.py --update` | アップデート (選択的更新) |
+
+### dev.py — 本体リポジトリ向けセットアップ
+
+本体リポジトリ専用。本体で `/gh`, `/mmy`, `/ret` などのスキルを使えるようにする。プロジェクトで実行するとエラー終了する。
+
+| コマンド | 内容 |
+|---|---|
+| `python core/dev.py setup` | 初回: Hook + スキルコピー + マニフェスト |
+| `python core/dev.py update` | スキルのみ再コピー |
+
+`install.py` の `setup_hooks` / `setup_skills` / `setup_os_skills_manifest` を再利用するため、ロジックは一元管理されている。
 
 ### session.py — セッション管理
 
@@ -131,7 +146,8 @@ SessionStart Hook から呼ばれる。
 ## 依存関係
 
 ```
-paths.py ← 全モジュール
+constants.py ← 全モジュール（リテラル禁止のため）
+paths.py ← 全モジュール（constants.py に依存）
 feedback.py ← 全モジュール
 page_parser.py ← index.py, record.py, session.py
 index.py ← load.py, session.py
@@ -139,6 +155,7 @@ docs.py ← load.py
 state.py ← /codi (全ステップ)
 load.py ← /codi ステップ1
 record.py ← /codi ステップ4
+install.py ← dev.py（ヘルパー再利用）
 gh/handler.py ← /codi ステップ5, /gh
 fb/handler.py ← /fb
 ```

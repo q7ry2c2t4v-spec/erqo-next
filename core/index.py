@@ -12,7 +12,7 @@ import sys
 from collections import deque
 
 from page_parser import parse_header
-from paths import INDEX_FILE, LIBS_DIR, STATE_DIR
+from paths import INDEX_FILE, LIBS_DIR, TAG_ALIASES_FILE
 
 
 # ---------------------------------------------------------------------------
@@ -280,12 +280,9 @@ def _load_index() -> dict:
 
 
 def _load_aliases() -> dict:
-    if not STATE_DIR:
+    if not TAG_ALIASES_FILE or not TAG_ALIASES_FILE.exists():
         return {}
-    alias_file = STATE_DIR / "tag_aliases.json"
-    if alias_file.exists():
-        return json.loads(alias_file.read_text(encoding="utf-8"))
-    return {}
+    return json.loads(TAG_ALIASES_FILE.read_text(encoding="utf-8"))
 
 
 def _expand_keywords(keywords: list[str], aliases: dict) -> list[str]:

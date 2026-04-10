@@ -6,6 +6,25 @@
 
 from pathlib import Path
 
+from constants import (
+    CLAUDE_DIR_NAME,
+    CLAUDE_MD_FILENAME,
+    FEEDBACK_DIR_NAME,
+    GITIGNORE_FILENAME,
+    INDEX_FILENAME,
+    LIBS_DIR_NAME,
+    OS_SKILLS_FILENAME,
+    SETTINGS_FILENAME,
+    SKILLS_DIR_NAME,
+    SPECS_DIR_NAME,
+    STATE_DIR_NAME,
+    TAG_ALIASES_FILENAME,
+    TEMPLATES_DIR_NAME,
+    UI_SPECS_DIR_NAME,
+    VERSION_CHECK_FILENAME,
+    VERSION_FILENAME,
+)
+
 # NXT_ROOT: core/ の親ディレクトリ（nxt 本元ではリポジトリルート、PJ では .nxt-core/）
 NXT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -14,7 +33,7 @@ def find_project_root() -> Path | None:
     """CLAUDE.md を上方向探索してプロジェクトルートを特定する。"""
     current = Path(__file__).resolve().parent
     while current != current.parent:
-        if (current / "CLAUDE.md").exists():
+        if (current / CLAUDE_MD_FILENAME).exists():
             return current
         current = current.parent
     return None
@@ -26,10 +45,10 @@ PROJECT_ROOT = find_project_root()
 IS_SOURCE = PROJECT_ROOT is not None and NXT_ROOT == PROJECT_ROOT
 
 # 派生パス
-LIBS_DIR = PROJECT_ROOT / ".libs" if PROJECT_ROOT else None
-STATE_DIR = PROJECT_ROOT / ".claude" / "state" if PROJECT_ROOT else None
-INDEX_FILE = STATE_DIR / "_index.json" if STATE_DIR else None
-SPECS_DIR = NXT_ROOT / "specs"
+LIBS_DIR = PROJECT_ROOT / LIBS_DIR_NAME if PROJECT_ROOT else None
+STATE_DIR = PROJECT_ROOT / CLAUDE_DIR_NAME / STATE_DIR_NAME if PROJECT_ROOT else None
+INDEX_FILE = STATE_DIR / INDEX_FILENAME if STATE_DIR else None
+SPECS_DIR = NXT_ROOT / SPECS_DIR_NAME
 
 # .libs/ サブディレクトリ
 DESIGN_DIR = LIBS_DIR / "design" if LIBS_DIR else None
@@ -39,5 +58,23 @@ DOCS_DIR = LIBS_DIR / "docs" if LIBS_DIR else None
 LOGS_DIR = LIBS_DIR / "session-logs" if LIBS_DIR else None
 
 # プロジェクト派生パス
-UI_SPECS_DIR = PROJECT_ROOT / ".ui-specs" if PROJECT_ROOT else None
-VERSION_FILE = NXT_ROOT / "VERSION"
+UI_SPECS_DIR = PROJECT_ROOT / UI_SPECS_DIR_NAME if PROJECT_ROOT else None
+VERSION_FILE = NXT_ROOT / VERSION_FILENAME
+
+# プロジェクトルート直下のファイル
+CLAUDE_MD_FILE = PROJECT_ROOT / CLAUDE_MD_FILENAME if PROJECT_ROOT else None
+GITIGNORE_FILE = PROJECT_ROOT / GITIGNORE_FILENAME if PROJECT_ROOT else None
+
+# .claude/ 配下
+SETTINGS_FILE = PROJECT_ROOT / CLAUDE_DIR_NAME / SETTINGS_FILENAME if PROJECT_ROOT else None
+PROJECT_SKILLS_DIR = PROJECT_ROOT / CLAUDE_DIR_NAME / SKILLS_DIR_NAME if PROJECT_ROOT else None
+
+# NXT_ROOT 配下
+SKILLS_SRC_DIR = NXT_ROOT / SKILLS_DIR_NAME
+TEMPLATES_DIR = NXT_ROOT / SPECS_DIR_NAME / TEMPLATES_DIR_NAME
+
+# .claude/state/ 配下のサブパス
+OS_SKILLS_MANIFEST_FILE = STATE_DIR / OS_SKILLS_FILENAME if STATE_DIR else None
+VERSION_CHECK_STATE_FILE = STATE_DIR / VERSION_CHECK_FILENAME if STATE_DIR else None
+TAG_ALIASES_FILE = STATE_DIR / TAG_ALIASES_FILENAME if STATE_DIR else None
+FEEDBACK_DIR = STATE_DIR / FEEDBACK_DIR_NAME if STATE_DIR else None

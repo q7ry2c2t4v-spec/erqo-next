@@ -20,32 +20,35 @@ if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8
 if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-from paths import NXT_ROOT, IS_SOURCE
+from paths import NXT_ROOT, IS_SOURCE, TEMPLATES_DIR
+from constants import (
+    LIBS_SHELVES,
+    DEFAULT_GITIGNORE_LINES,
+    QA_CONFIG_TEMPLATES,
+    CLAUDE_DIR_NAME,
+    CLAUDE_MD_FILENAME,
+    GITIGNORE_FILENAME,
+    LIBS_DIR_NAME,
+    OS_SKILLS_FILENAME,
+    SCRIPTS_DIR_NAME,
+    SETTINGS_FILENAME,
+    SKILL_MD_FILENAME,
+    SKILLS_DIR_NAME,
+    STATE_DIR_NAME,
+    UI_SPECS_DIR_NAME,
+)
 from feedback import init_error_handling
 
 init_error_handling()
 
-# --- 定数 ---
-
-LIBS_SHELVES = ["design", "features", "docs", "research", "rules", "session-logs", "archive"]
+# --- モジュール内派生定数 ---
 
 STANDARD_DIRS = [
-    *[f".libs/{s}" for s in LIBS_SHELVES],
-    ".claude/state",
-    "scripts",
-    ".ui-specs",
+    *[f"{LIBS_DIR_NAME}/{s}" for s in LIBS_SHELVES],
+    f"{CLAUDE_DIR_NAME}/{STATE_DIR_NAME}",
+    SCRIPTS_DIR_NAME,
+    UI_SPECS_DIR_NAME,
 ]
-
-GITIGNORE_LINES = [
-    ".claude/state/",
-    ".claude/settings.local.json",
-    "node_modules/",
-    ".next/",
-]
-
-OS_SKILLS_FILENAME = "_os_skills.json"
-
-QA_CONFIG_TEMPLATES = ["eslint.config.mjs", "playwright.config.ts", "lighthouserc.js"]
 
 
 # --- ユーティリティ ---
@@ -97,19 +100,39 @@ def _hook_config(nxt_path: str) -> dict:
     }
 
 
+def _claude_dir(project_root: Path) -> Path:
+    return project_root / CLAUDE_DIR_NAME
+
+
+def _state_dir(project_root: Path) -> Path:
+    return _claude_dir(project_root) / STATE_DIR_NAME
+
+
+def _project_skills_dir(project_root: Path) -> Path:
+    return _claude_dir(project_root) / SKILLS_DIR_NAME
+
+
+def _settings_path(project_root: Path) -> Path:
+    return _claude_dir(project_root) / SETTINGS_FILENAME
+
+
+def _os_skills_manifest_path(project_root: Path) -> Path:
+    return _state_dir(project_root) / OS_SKILLS_FILENAME
+
+
 # --- セットアップ関数 ---
 
 
 def setup_claude_md(project_root: Path) -> bool:
     """CLAUDE.md を作成する。既存の場合はスキップ。"""
-    claude_md = project_root / "CLAUDE.md"
+    claude_md = project_root / CLAUDE_MD_FILENAME
     if claude_md.exists():
-        print("  CLAUDE.md: 既存 (スキップ)")
+        print(f"  {CLAUDE_MD_FILENAME}: 既存 (スキップ)")
         return False
     nxt_path = _nxt_relpath(project_root)
     content = _claude_md_content(project_root.name, nxt_path)
     claude_md.write_text(content, encoding="utf-8")
-    print("  CLAUDE.md: 作成")
+    print(f"  {CLAUDE_MD_FILENAME}: 作成")
     return True
 
 
@@ -118,7 +141,7 @@ def setup_hooks(project_root: Path) -> bool:
     nxt_path = _nxt_relpath(project_root)
     hook_config = _hook_config(nxt_path)
 
-    settings_path = project_root / ".claude" / "settings.json"
+    settings_path = _settings_path(project_root)
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
     if settings_path.exists():
@@ -147,28 +170,35 @@ def setup_hooks(project_root: Path) -> bool:
         json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(f"  settings.json: Hook {'追加' if added else '設定済み (変更なし)'}")
+    print(f"  {SETTINGS_FILENAME}: Hook {'追加' if added else '設定済み (変更なし)'}")
     return added
 
 
 def _scan_skills() -> list[str]:
     """NXT_ROOT/skills/ 内のスキルを自動スキャンする。"""
-    skills_dir = NXT_ROOT / "skills"
+    skills_dir = NXT_ROOT / SKILLS_DIR_NAME
     if not skills_dir.exists():
         return []
     return sorted(
         d.name for d in skills_dir.iterdir()
-        if d.is_dir() and (d / "SKILL.md").exists()
+        if d.is_dir() and (d / SKILL_MD_FILENAME).exists()
     )
 
 
 def _rewrite_skill_paths(dst_dir: Path, nxt_path: str) -> None:
-    """コピー先の SKILL.md 内の {nxt} プレースホルダを実パスに置換する。"""
-    skill_md = dst_dir / "SKILL.md"
+    """コピー先の SKILL.md 内の {nxt} プレースホルダを実パスに置換する。
+
+    本体リポジトリ（nxt_path == "."）の場合は "{nxt}/" ごと除去する。
+    プロジェクトの場合は "{nxt}" を相対パスに置換する。
+    """
+    skill_md = dst_dir / SKILL_MD_FILENAME
     if not skill_md.exists():
         return
     content = skill_md.read_text(encoding="utf-8")
-    rewritten = content.replace("{nxt}", nxt_path)
+    if nxt_path == ".":
+        rewritten = content.replace("{nxt}/", "")
+    else:
+        rewritten = content.replace("{nxt}", nxt_path)
     if rewritten != content:
         skill_md.write_text(rewritten, encoding="utf-8")
 
@@ -180,8 +210,8 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
     更新: _os_skills.json に記録されたスキルのみ上書き。固有スキルは保持。
     """
     nxt_path = _nxt_relpath(project_root)
-    src_dir = NXT_ROOT / "skills"
-    dst_dir = project_root / ".claude" / "skills"
+    src_dir = NXT_ROOT / SKILLS_DIR_NAME
+    dst_dir = _project_skills_dir(project_root)
     dst_dir.mkdir(parents=True, exist_ok=True)
 
     os_skills = _scan_skills()
@@ -191,7 +221,7 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
 
     # 更新モード: _os_skills.json で管理対象を判定
     if update_mode:
-        manifest_path = project_root / ".claude" / "state" / OS_SKILLS_FILENAME
+        manifest_path = _os_skills_manifest_path(project_root)
         if manifest_path.exists():
             try:
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -223,13 +253,13 @@ def setup_os_skills_manifest(project_root: Path) -> None:
     os_skills = _scan_skills()
     manifest = {"version": "1.0.0", "skills": os_skills}
 
-    manifest_path = project_root / ".claude" / "state" / OS_SKILLS_FILENAME
+    manifest_path = _os_skills_manifest_path(project_root)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(f"  _os_skills.json: {len(os_skills)} 個のスキルを記録")
+    print(f"  {OS_SKILLS_FILENAME}: {len(os_skills)} 個のスキルを記録")
 
 
 def setup_directories(project_root: Path) -> list[str]:
@@ -250,38 +280,37 @@ def setup_directories(project_root: Path) -> list[str]:
 
 def setup_gitignore(project_root: Path) -> bool:
     """.gitignore を生成する。既存の場合は不足分を追記。"""
-    gitignore = project_root / ".gitignore"
+    gitignore = project_root / GITIGNORE_FILENAME
 
     if gitignore.exists():
         content = gitignore.read_text(encoding="utf-8")
         existing = {line.strip() for line in content.splitlines()}
-        missing = [line for line in GITIGNORE_LINES if line not in existing]
+        missing = [line for line in DEFAULT_GITIGNORE_LINES if line not in existing]
         if not missing:
-            print("  .gitignore: 設定済み (変更なし)")
+            print(f"  {GITIGNORE_FILENAME}: 設定済み (変更なし)")
             return False
         if not content.endswith("\n"):
             content += "\n"
         content += "\n".join(missing) + "\n"
         gitignore.write_text(content, encoding="utf-8")
-        print(f"  .gitignore: {len(missing)} 行追加")
+        print(f"  {GITIGNORE_FILENAME}: {len(missing)} 行追加")
     else:
-        gitignore.write_text("\n".join(GITIGNORE_LINES) + "\n", encoding="utf-8")
-        print("  .gitignore: 作成")
+        gitignore.write_text("\n".join(DEFAULT_GITIGNORE_LINES) + "\n", encoding="utf-8")
+        print(f"  {GITIGNORE_FILENAME}: 作成")
 
     return True
 
 
 def setup_qa_configs(project_root: Path) -> int:
     """品質チェック設定ファイルをテンプレートから生成する。既存は上書きしない。"""
-    templates_dir = NXT_ROOT / "specs" / "templates"
-    if not templates_dir.exists():
+    if not TEMPLATES_DIR.exists():
         print("  品質チェック設定: テンプレートなし (スキップ)")
         return 0
 
     created = 0
     skipped = []
     for filename in QA_CONFIG_TEMPLATES:
-        src = templates_dir / filename
+        src = TEMPLATES_DIR / filename
         dst = project_root / filename
         if not src.exists():
             continue
@@ -306,13 +335,13 @@ def verify_installation(project_root: Path) -> bool:
     all_ok = True
 
     # ファイルチェック
-    for f in ["CLAUDE.md", ".gitignore"]:
+    for f in [CLAUDE_MD_FILENAME, GITIGNORE_FILENAME]:
         ok = (project_root / f).exists()
         print(f"  {'OK' if ok else 'NG'} {f}")
         all_ok = all_ok and ok
 
     # settings.json + SessionStart Hook
-    settings_path = project_root / ".claude" / "settings.json"
+    settings_path = _settings_path(project_root)
     if settings_path.exists():
         try:
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
@@ -321,19 +350,19 @@ def verify_installation(project_root: Path) -> bool:
             has_hook = False
     else:
         has_hook = False
-    print(f"  {'OK' if has_hook else 'NG'} settings.json (SessionStart Hook)")
+    print(f"  {'OK' if has_hook else 'NG'} {SETTINGS_FILENAME} (SessionStart Hook)")
     all_ok = all_ok and has_hook
 
     # スキル
-    skills_dir = project_root / ".claude" / "skills"
+    skills_dir = _project_skills_dir(project_root)
     has_skills = skills_dir.exists() and any(skills_dir.iterdir()) if skills_dir.exists() else False
     label = "OK" if has_skills else "--"
-    print(f"  {label} .claude/skills/ (スキル)")
+    print(f"  {label} {CLAUDE_DIR_NAME}/{SKILLS_DIR_NAME}/ (スキル)")
 
     # .libs/ 標準棚
     for shelf in LIBS_SHELVES:
-        ok = (project_root / ".libs" / shelf).exists()
-        print(f"  {'OK' if ok else 'NG'} .libs/{shelf}/")
+        ok = (project_root / LIBS_DIR_NAME / shelf).exists()
+        print(f"  {'OK' if ok else 'NG'} {LIBS_DIR_NAME}/{shelf}/")
         all_ok = all_ok and ok
 
     return all_ok

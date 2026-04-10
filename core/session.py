@@ -20,19 +20,30 @@ if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8
 if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-from paths import PROJECT_ROOT, IS_SOURCE, STATE_DIR, DESIGN_DIR, LOGS_DIR, VERSION_FILE
+from paths import (
+    PROJECT_ROOT,
+    IS_SOURCE,
+    STATE_DIR,
+    DESIGN_DIR,
+    LOGS_DIR,
+    VERSION_FILE,
+    VERSION_CHECK_STATE_FILE,
+)
+from constants import (
+    STATUS_TODO,
+    STATUS_WIP,
+    STATE_FILE_PREFIX,
+    SESSION_LOG_PATTERN,
+    ERQO_REPO_URL,
+    VERSION_CHECK_INTERVAL_SEC,
+    MAX_CONTEXT_LENGTH,
+    SESSION_LOG_PREVIEW_LINES,
+)
 from index import reindex
-from page_parser import parse_sections, parse_tp_row, STATUS_TODO, STATUS_WIP, STATE_FILE_PREFIX
+from page_parser import parse_sections, parse_tp_row
 from feedback import init_error_handling
 
 init_error_handling()
-
-# --- 定数 ---
-
-VERSION_CHECK_INTERVAL = 86400  # 1日 (秒)
-VERSION_CHECK_FILE = "_version_check.json"
-MAX_CONTEXT_LENGTH = 10000
-SESSION_LOG_PREVIEW_LINES = 30
 
 
 # --- ヘルパー ---
@@ -80,14 +91,14 @@ def check_version() -> str | None:
         return None
 
     # 1日1回制限
-    check_file = STATE_DIR / VERSION_CHECK_FILE if STATE_DIR else None
+    check_file = VERSION_CHECK_STATE_FILE
     if check_file:
         try:
             if check_file.exists():
                 data = json.loads(check_file.read_text(encoding="utf-8"))
                 last_check = datetime.fromisoformat(data["checked_at"])
                 now = datetime.now(timezone.utc)
-                if (now - last_check).total_seconds() < VERSION_CHECK_INTERVAL:
+                if (now - last_check).total_seconds() < VERSION_CHECK_INTERVAL_SEC:
                     return None
         except (json.JSONDecodeError, KeyError, OSError, ValueError):
             pass
@@ -97,8 +108,7 @@ def check_version() -> str | None:
     # GitHub API で最新タグを取得
     try:
         result = subprocess.run(
-            ["git", "ls-remote", "--tags", "--sort=-v:refname",
-             "https://github.com/q7ry2c2t4v-spec/erqo-next.git"],
+            ["git", "ls-remote", "--tags", "--sort=-v:refname", ERQO_REPO_URL],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode != 0 or not result.stdout.strip():
@@ -207,7 +217,7 @@ def find_latest_session_log() -> Path | None:
     log_dir = _log_dir()
     if not log_dir or not log_dir.exists():
         return None
-    md_files = sorted(log_dir.rglob("slog-*.md"), reverse=True)
+    md_files = sorted(log_dir.rglob(SESSION_LOG_PATTERN), reverse=True)
     return md_files[0] if md_files else None
 
 

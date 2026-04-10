@@ -25,7 +25,15 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 from paths import LIBS_DIR, IS_SOURCE, DESIGN_DIR, FEATURES_DIR, UI_SPECS_DIR
-from page_parser import parse_sections, TP_FILE_PATTERN, STATUS_DONE, STATUS_TODO, STATUS_WIP, HISTORY_DIR_NAME, find_section_dir
+from constants import (
+    TP_FILE_PATTERN,
+    STATUS_DONE,
+    STATUS_TODO,
+    STATUS_WIP,
+    HISTORY_DIR_NAME,
+    INDEX_MD_FILENAME,
+)
+from page_parser import parse_sections, find_section_dir
 from feedback import init_error_handling
 
 init_error_handling()
@@ -256,7 +264,7 @@ def guide_update_index(section: str) -> None:
 
     sections = []
     for md_file in sorted(d.glob("*.md")):
-        if md_file.name == "index.md":
+        if md_file.name == INDEX_MD_FILENAME:
             continue
         try:
             content = md_file.read_text(encoding="utf-8")
@@ -280,9 +288,9 @@ def guide_update_index(section: str) -> None:
         lines.append("(まだ機能ガイドはありません)")
     lines.append("")
 
-    index_path = d / "index.md"
+    index_path = d / INDEX_MD_FILENAME
     index_path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"record: index.md 更新 - {len(sections)} セクション -> {index_path}")
+    print(f"record: {INDEX_MD_FILENAME} 更新 - {len(sections)} セクション -> {index_path}")
 
 
 # --- メイン ---

@@ -11,7 +11,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-from paths import STATE_DIR, VERSION_FILE
+from paths import VERSION_FILE, FEEDBACK_DIR
 
 
 def _get_nxt_version() -> str:
@@ -24,9 +24,8 @@ def _get_nxt_version() -> str:
 
 def _feedback_dir() -> Path:
     """フィードバック保存ディレクトリを返す（なければ作成）。"""
-    d = STATE_DIR / "feedback"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+    return FEEDBACK_DIR
 
 
 def _save_report(data: dict) -> Path:

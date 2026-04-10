@@ -26,19 +26,16 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 from paths import STATE_DIR, DESIGN_DIR
-from page_parser import parse_tp_row, TP_FILE_PATTERN, STATUS_DONE, STATE_FILE_PREFIX
+from constants import (
+    TP_FILE_PATTERN,
+    STATUS_DONE,
+    STATE_FILE_PREFIX,
+    PIPELINE_STEPS,
+)
+from page_parser import parse_tp_row
 from feedback import init_error_handling
 
 init_error_handling()
-
-# 5ステップ定義
-STEPS = [
-    "prepare",        # 1. 準備 (タスク読み込み + コンテキスト収集)
-    "implementation", # 2. 実装
-    "verification",   # 3. 検証
-    "recording",      # 4. 記録 (features + ステータス + ガイド)
-    "commit",         # 5. コミット
-]
 
 
 def _state_file(task_id: str) -> Path:
@@ -125,7 +122,7 @@ def init(task_id: str) -> None:
         step_num = len(completed)
         print("codi_state: 既存の状態ファイルを検出 (中断復旧)")
         print(f"  完了済み: {', '.join(completed) if completed else 'なし'}")
-        print(f"  次のステップ: {STEPS[step_num] if step_num < len(STEPS) else '全完了'}")
+        print(f"  次のステップ: {PIPELINE_STEPS[step_num] if step_num < len(PIPELINE_STEPS) else '全完了'}")
         print(json.dumps(existing, ensure_ascii=False))
         return
 
@@ -148,9 +145,9 @@ def init(task_id: str) -> None:
 
 def complete(task_id: str, step_name: str) -> None:
     """ステップ完了を記録する。"""
-    if step_name not in STEPS:
+    if step_name not in PIPELINE_STEPS:
         print(f"エラー: 不明なステップ '{step_name}'", file=sys.stderr)
-        print(f"有効なステップ: {', '.join(STEPS)}", file=sys.stderr)
+        print(f"有効なステップ: {', '.join(PIPELINE_STEPS)}", file=sys.stderr)
         sys.exit(1)
 
     state = _read_state(task_id)
@@ -162,13 +159,13 @@ def complete(task_id: str, step_name: str) -> None:
     if step_name not in completed:
         completed.append(step_name)
 
-    step_index = STEPS.index(step_name)
+    step_index = PIPELINE_STEPS.index(step_name)
     state["current_step"] = step_index + 2
     state["completed_steps"] = completed
     state["last_update"] = _now_iso()
 
     _atomic_write_json(_state_file(task_id), state)
-    print(f"codi_state: {step_name} 完了を記録 ({len(completed)}/{len(STEPS)})")
+    print(f"codi_state: {step_name} 完了を記録 ({len(completed)}/{len(PIPELINE_STEPS)})")
 
 
 def get(task_id: str) -> None:
