@@ -13,7 +13,7 @@
 │   ├── docs.py
 │   ├── install.py     ← プロジェクト用セットアップ
 │   ├── dev.py         ← 本体リポジトリ用セットアップ（IS_SOURCE 限定）
-│   ├── git_ops.py     ← git 操作ヘルパー（/wrap, /codi 共通）
+│   ├── git_ops.py     ← git 操作ヘルパー（/wrap, /codi, /aud 共通）
 │   ├── session.py
 │   ├── state.py
 │   ├── load.py
@@ -95,7 +95,7 @@
 
 ### git_ops.py — git 操作ヘルパー
 
-`/codi` ステップ5 と手動の差分確認で使う git ラッパー。プロジェクト・本体リポジトリ両方で動く（IS_SOURCE ガードなし）。
+`/codi` ステップ5、`/wrap`、`/aud`、手動の差分確認で使う git ラッパー。プロジェクト・本体リポジトリ両方で動く（IS_SOURCE ガードなし）。
 
 | コマンド | 内容 |
 |---|---|
@@ -158,7 +158,7 @@ docs.py ← load.py
 state.py ← /codi (全ステップ)
 load.py ← /codi ステップ1
 record.py ← /codi ステップ4
-git_ops.py ← /codi ステップ5, /wrap
+git_ops.py ← /codi ステップ5, /wrap, /aud
 install.py ← dev.py（ヘルパー再利用）
 fb/handler.py ← /fb
 ```
