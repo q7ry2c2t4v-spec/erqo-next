@@ -1,0 +1,5 @@
+.libs/
+.ui-specs/
+.claude/
+.gitignore
+CLAUDE.md
