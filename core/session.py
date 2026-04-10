@@ -98,7 +98,7 @@ def check_version() -> str | None:
     try:
         result = subprocess.run(
             ["git", "ls-remote", "--tags", "--sort=-v:refname",
-             "https://github.com/erqo-nxt/erqo-nxt.git"],
+             "https://github.com/erqo-next/erqo-next.git"],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode != 0 or not result.stdout.strip():
@@ -236,7 +236,7 @@ def build_normal_context() -> str:
     if PROJECT_ROOT and not IS_SOURCE:
         parts.append(f"# プロジェクト: {PROJECT_ROOT.name}")
     else:
-        parts.append("# erqo-nxt 本体リポジトリ")
+        parts.append("# erqo-next 本体リポジトリ")
 
     # 2. インデックス再生成
     run_reindex()

@@ -1,6 +1,6 @@
 # erqo-next
 
-## erqo-nxt OS
+## erqo-next OS
 @specs/00-identity.md
 @specs/01-workflow.md
 @specs/02-skills.md

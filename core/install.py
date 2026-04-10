@@ -60,7 +60,7 @@ def _claude_md_content(project_name: str, nxt_path: str) -> str:
     return (
         f"# {project_name}\n"
         f"\n"
-        f"## erqo-nxt OS\n"
+        f"## erqo-next OS\n"
         f"@{nxt_path}/specs/00-identity.md\n"
         f"@{nxt_path}/specs/01-workflow.md\n"
         f"@{nxt_path}/specs/02-skills.md\n"
@@ -347,7 +347,7 @@ def main() -> None:
     project_root = NXT_ROOT.parent
 
     mode = "アップデート" if update_mode else "インストール"
-    print(f"erqo-nxt {mode}: {project_root.name}")
+    print(f"erqo-next {mode}: {project_root.name}")
     print()
 
     # 1. CLAUDE.md (新規のみ)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release.sh — erqo-nxt リリーススクリプト
+# release.sh — erqo-next リリーススクリプト
 #
 # 使い方:
 #   bash release.sh v1.0.0
@@ -34,7 +34,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NXT_ROOT="$SCRIPT_DIR"
 
-echo "=== erqo-nxt release $VERSION_TAG ==="
+echo "=== erqo-next release $VERSION_TAG ==="
 echo ""
 
 # --- 1. VERSION ファイル更新 ---
