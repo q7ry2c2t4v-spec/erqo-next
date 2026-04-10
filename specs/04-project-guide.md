@@ -29,7 +29,7 @@
 | `docs/` | 外部ドキュメント参照 | 手動配置 |
 | `research/` | ウェブリサーチの調査結果 | /rsrc |
 | `rules/` | プロジェクトルール | /ruru |
-| `session-logs/` | セッションログ | /mmy |
+| `session-logs/` | セッションログ | /wrap |
 | `archive/` | アーカイブ | 自動 |
 
 ### 復元可能性の原則

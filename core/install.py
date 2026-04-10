@@ -207,7 +207,11 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
     """スキルを .claude/skills/ にコピーする。
 
     新規: 全スキルをコピー。
-    更新: _os_skills.json に記録されたスキルのみ上書き。固有スキルは保持。
+    更新: 前回 _os_skills.json に記録されていたスキルのみ管理する。
+          - 現在も存在するスキル → 上書きコピー
+          - 削除されたスキル → .claude/skills/ から削除（stale 除去）
+          - 新規追加されたスキル → コピー（自動取り込み）
+          固有スキル（マニフェスト外）は保持される。
     """
     nxt_path = _nxt_relpath(project_root)
     src_dir = NXT_ROOT / SKILLS_DIR_NAME
@@ -219,20 +223,29 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
         print("  スキル: ソースなし (スキップ)")
         return 0
 
-    # 更新モード: _os_skills.json で管理対象を判定
+    # 更新モード: 前回のマニフェストと突き合わせて stale 削除を行う
+    removed = 0
     if update_mode:
         manifest_path = _os_skills_manifest_path(project_root)
+        previous_managed: set[str] = set()
         if manifest_path.exists():
             try:
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                managed = set(manifest.get("skills", []))
+                previous_managed = set(manifest.get("skills", []))
             except (json.JSONDecodeError, OSError):
-                managed = set(os_skills)
-        else:
-            managed = set(os_skills)
-        targets = [s for s in os_skills if s in managed]
-    else:
-        targets = os_skills
+                previous_managed = set()
+
+        # stale: 前回管理していたが現在の skills/ に存在しないもの
+        current = set(os_skills)
+        stale = previous_managed - current
+        for skill_name in sorted(stale):
+            stale_path = dst_dir / skill_name
+            if stale_path.exists():
+                shutil.rmtree(stale_path)
+                removed += 1
+
+    # コピー対象: 新規モードでも更新モードでも現在の os_skills 全てを反映
+    targets = os_skills
 
     count = 0
     for skill_name in targets:
@@ -244,7 +257,10 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
         _rewrite_skill_paths(dst_skill, nxt_path)
         count += 1
 
-    print(f"  スキル: {count} 個コピー")
+    if removed:
+        print(f"  スキル: {count} 個コピー / {removed} 個削除")
+    else:
+        print(f"  スキル: {count} 個コピー")
     return count
 
 

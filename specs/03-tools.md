@@ -13,12 +13,12 @@
 │   ├── docs.py
 │   ├── install.py     ← プロジェクト用セットアップ
 │   ├── dev.py         ← 本体リポジトリ用セットアップ（IS_SOURCE 限定）
+│   ├── git_ops.py     ← git 操作ヘルパー（/wrap, /codi 共通）
 │   ├── session.py
 │   ├── state.py
 │   ├── load.py
 │   └── record.py
-└── skills/        ← スキル定義（handler.py + SKILL.md）
-    ├── gh/handler.py
+└── skills/        ← スキル定義（SKILL.md ＋ 必要に応じて handler.py）
     └── fb/handler.py
 ```
 
@@ -83,14 +83,27 @@
 
 ### dev.py — 本体リポジトリ向けセットアップ
 
-本体リポジトリ専用。本体で `/gh`, `/mmy`, `/ret` などのスキルを使えるようにする。プロジェクトで実行するとエラー終了する。
+本体リポジトリ専用。本体で `/wrap`, `/ret` などのスキルを使えるようにする。プロジェクトで実行するとエラー終了する。
 
 | コマンド | 内容 |
 |---|---|
 | `python core/dev.py setup` | 初回: Hook + スキルコピー + マニフェスト |
 | `python core/dev.py update` | スキルのみ再コピー |
+| `python core/dev.py _sync` | PostToolUse Hook 内部用（stdin 経由） |
 
 `install.py` の `setup_hooks` / `setup_skills` / `setup_os_skills_manifest` を再利用するため、ロジックは一元管理されている。
+
+### git_ops.py — git 操作ヘルパー
+
+`/wrap` と `/codi` ステップ5 から共通で使われる git ラッパー。プロジェクト・本体リポジトリ両方で動く（IS_SOURCE ガードなし）。
+
+| コマンド | 内容 |
+|---|---|
+| `python core/git_ops.py check` | 差分確認 |
+| `python core/git_ops.py commit "msg"` | git add -A → commit |
+| `python core/git_ops.py commit "msg" --files A B C` | 指定ファイルのみ commit |
+| `python core/git_ops.py push` | push |
+| `python core/git_ops.py full "msg"` | commit + push |
 
 ### session.py — セッション管理
 
@@ -128,15 +141,6 @@ SessionStart Hook から呼ばれる。
 
 ## スキルスクリプト
 
-### skills/gh/handler.py
-
-| コマンド | 内容 |
-|---|---|
-| `python skills/gh/handler.py check` | 差分確認 |
-| `python skills/gh/handler.py commit "msg"` | git add -A → commit |
-| `python skills/gh/handler.py push` | push |
-| `python skills/gh/handler.py full "msg"` | commit + push |
-
 ### skills/fb/handler.py
 
 | コマンド | 内容 |
@@ -155,7 +159,7 @@ docs.py ← load.py
 state.py ← /codi (全ステップ)
 load.py ← /codi ステップ1
 record.py ← /codi ステップ4
+git_ops.py ← /codi ステップ5, /wrap
 install.py ← dev.py（ヘルパー再利用）
-gh/handler.py ← /codi ステップ5, /gh
 fb/handler.py ← /fb
 ```

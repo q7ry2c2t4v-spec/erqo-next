@@ -155,7 +155,7 @@ python "{nxt}/core/state.py" $ARGUMENTS complete recording
 ### ステップ5: コミット (commit)
 
 ```bash
-python "{nxt}/skills/gh/handler.py" commit "feat($ARGUMENTS): 実装・記録・ガイド更新"
+python "{nxt}/core/git_ops.py" commit "feat($ARGUMENTS): 実装・記録・ガイド更新"
 python "{nxt}/core/state.py" $ARGUMENTS complete commit
 python "{nxt}/core/state.py" $ARGUMENTS delete
 ```
