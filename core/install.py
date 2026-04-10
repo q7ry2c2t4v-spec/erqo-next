@@ -20,7 +20,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8
 if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-from paths import NXT_ROOT
+from paths import NXT_ROOT, IS_SOURCE
 from feedback import init_error_handling
 
 init_error_handling()
@@ -343,6 +343,10 @@ def verify_installation(project_root: Path) -> bool:
 
 
 def main() -> None:
+    if IS_SOURCE:
+        print("エラー: このスクリプトはプロジェクト内でのみ実行できます。", file=sys.stderr)
+        sys.exit(1)
+
     update_mode = "--update" in sys.argv
     project_root = NXT_ROOT.parent
 

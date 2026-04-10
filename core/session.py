@@ -98,7 +98,7 @@ def check_version() -> str | None:
     try:
         result = subprocess.run(
             ["git", "ls-remote", "--tags", "--sort=-v:refname",
-             "https://github.com/erqo-next/erqo-next.git"],
+             "https://github.com/q7ry2c2t4v-spec/erqo-next.git"],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode != 0 or not result.stdout.strip():

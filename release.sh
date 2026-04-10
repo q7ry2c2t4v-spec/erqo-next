@@ -103,7 +103,7 @@ echo "  OK: 全ファイル確認済み (core: ${#CORE_FILES[@]}, specs: 6, skil
 
 echo "3/4 git tag $VERSION_TAG..."
 
-cd "$NXT_ROOT/.."  # プロジェクトルートへ
+cd "$NXT_ROOT"  # リポジトリルートへ
 git add -A
 git commit -m "release: $VERSION_TAG" || echo "  (変更なし — コミットスキップ)"
 git tag -a "$VERSION_TAG" -m "Release $VERSION_TAG"
