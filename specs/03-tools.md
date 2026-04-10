@@ -95,15 +95,14 @@
 
 ### git_ops.py — git 操作ヘルパー
 
-`/wrap` と `/codi` ステップ5 から共通で使われる git ラッパー。プロジェクト・本体リポジトリ両方で動く（IS_SOURCE ガードなし）。
+`/codi` ステップ5 と手動の差分確認で使う git ラッパー。プロジェクト・本体リポジトリ両方で動く（IS_SOURCE ガードなし）。
 
 | コマンド | 内容 |
 |---|---|
 | `python core/git_ops.py check` | 差分確認 |
 | `python core/git_ops.py commit "msg"` | git add -A → commit |
-| `python core/git_ops.py commit "msg" --files A B C` | 指定ファイルのみ commit |
-| `python core/git_ops.py push` | push |
-| `python core/git_ops.py full "msg"` | commit + push |
+
+push や指定ファイルコミットが必要な時は `git` を直接呼ぶ（`/wrap` がそうしている）。
 
 ### session.py — セッション管理
 

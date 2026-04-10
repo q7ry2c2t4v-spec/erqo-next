@@ -34,9 +34,8 @@ def main() -> None:
 
     kind = sys.argv[1]
     summary = sys.argv[2]
-    detail_text = sys.argv[3] if len(sys.argv) > 3 else ""
+    detail = sys.argv[3] if len(sys.argv) > 3 else ""
 
-    detail = detail_text
     path = send_feedback(kind=kind, summary=summary, detail=detail)
 
     if path:

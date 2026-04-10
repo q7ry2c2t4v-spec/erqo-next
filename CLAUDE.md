@@ -8,3 +8,4 @@
 @specs/04-project-guide.md
 @specs/05-session.md
 @specs/06-coding-rules.md
+@specs/07-scopes.md

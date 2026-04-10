@@ -52,6 +52,11 @@ DEFAULT_GITIGNORE_LINES = [
     ".next/",
 ]
 
+# --- 共通 permission 設定（本元・プロジェクト両方に適用） ---
+
+PERMISSION_DEFAULTS_ALLOW = ["Bash", "Edit", "Write", "Read"]
+PERMISSION_DEFAULTS_MODE = "bypassPermissions"
+
 # --- TP テーブルのステータス文字列 ---
 
 STATUS_DONE = "完了"

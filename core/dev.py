@@ -34,7 +34,12 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
 
 from paths import IS_SOURCE, PROJECT_ROOT
 from constants import SKILLS_DIR_NAME
-from install import setup_hooks, setup_skills, setup_os_skills_manifest
+from install import (
+    setup_hooks,
+    setup_skills,
+    setup_os_skills_manifest,
+    setup_permission_defaults,
+)
 from feedback import init_error_handling
 
 init_error_handling()
@@ -49,7 +54,7 @@ def _require_source() -> None:
 
 
 def cmd_setup() -> None:
-    """初回セットアップ: Hook + スキル + マニフェスト。"""
+    """初回セットアップ: Hook + 共通 permission + スキル + マニフェスト。"""
     _require_source()
     print(f"erqo-next 本体セットアップ: {PROJECT_ROOT.name}")
     print()
@@ -57,10 +62,13 @@ def cmd_setup() -> None:
     # 1. Hook 設定
     setup_hooks(PROJECT_ROOT)
 
-    # 2. スキルコピー
+    # 2. 共通 permission 設定
+    setup_permission_defaults(PROJECT_ROOT)
+
+    # 3. スキルコピー
     setup_skills(PROJECT_ROOT, update_mode=False)
 
-    # 3. マニフェスト記録
+    # 4. マニフェスト記録
     setup_os_skills_manifest(PROJECT_ROOT)
 
     print()

@@ -30,6 +30,8 @@ from constants import (
     GITIGNORE_FILENAME,
     LIBS_DIR_NAME,
     OS_SKILLS_FILENAME,
+    PERMISSION_DEFAULTS_ALLOW,
+    PERMISSION_DEFAULTS_MODE,
     SCRIPTS_DIR_NAME,
     SETTINGS_FILENAME,
     SKILL_MD_FILENAME,
@@ -172,6 +174,50 @@ def setup_hooks(project_root: Path) -> bool:
     )
     print(f"  {SETTINGS_FILENAME}: Hook {'追加' if added else '設定済み (変更なし)'}")
     return added
+
+
+def setup_permission_defaults(project_root: Path) -> bool:
+    """settings.json に共通 permission 設定をマージする。
+
+    本元・プロジェクト両方で同じ設定を使うため、constants.PERMISSION_DEFAULTS_*
+    を読み込んで .claude/settings.json に書き込む。既存の allow リストには
+    重複なくマージし、defaultMode と skipDangerousModePermissionPrompt は
+    上書きする。
+    """
+    settings_path = _settings_path(project_root)
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            settings = {}
+    else:
+        settings = {}
+
+    permissions = settings.setdefault("permissions", {})
+    existing_allow = list(permissions.get("allow", []))
+    merged_allow = list(existing_allow)
+    for entry in PERMISSION_DEFAULTS_ALLOW:
+        if entry not in merged_allow:
+            merged_allow.append(entry)
+
+    changed = (
+        merged_allow != existing_allow
+        or permissions.get("defaultMode") != PERMISSION_DEFAULTS_MODE
+        or settings.get("skipDangerousModePermissionPrompt") is not True
+    )
+
+    permissions["allow"] = merged_allow
+    permissions["defaultMode"] = PERMISSION_DEFAULTS_MODE
+    settings["skipDangerousModePermissionPrompt"] = True
+
+    settings_path.write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"  {SETTINGS_FILENAME}: 共通 permission 設定 {'更新' if changed else '設定済み (変更なし)'}")
+    return changed
 
 
 def _scan_skills() -> list[str]:
@@ -405,6 +451,9 @@ def main() -> None:
 
     # 2. Hook 設定
     setup_hooks(project_root)
+
+    # 2.5. 共通 permission 設定
+    setup_permission_defaults(project_root)
 
     # 3. スキルコピー
     setup_skills(project_root, update_mode)
