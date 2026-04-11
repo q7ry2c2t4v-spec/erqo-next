@@ -11,3 +11,4 @@
 @specs/07-scopes.md
 @specs/08-responsibility.md
 @specs/09-memory.md
+@specs/10-proposal.md
