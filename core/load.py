@@ -19,18 +19,20 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 from paths import LIBS_DIR, IS_SOURCE, DESIGN_DIR, FEATURES_DIR, RULES_DIR
-from constants import TP_FILE_PATTERN, HISTORY_DIR_NAME
+from constants import (
+    TP_FILE_PATTERN,
+    HISTORY_DIR_NAME,
+    UI_ID_PATTERNS,
+    UI_TAG_KEYWORDS,
+    LAYOUT_ID_PATTERNS,
+    LAYOUT_TAG_KEYWORDS,
+)
 from page_parser import parse_tp_row, parse_header, find_section_dir
 from index import collect as index_collect
 from docs import search as docs_search
 from feedback import init_error_handling
 
 init_error_handling()
-
-# --- UI 判定キーワード ---
-
-UI_ID_PATTERNS = ["UI", "CARD", "VIEWER", "THEME", "COLOR", "LAYOUT", "NAV", "PAGE"]
-UI_TAG_KEYWORDS = ["ui", "コンポーネント", "レイアウト", "画面", "component", "layout", "page"]
 
 
 # --- TP 探索 ---
@@ -85,11 +87,16 @@ def _collect_section_features(task_id: str, features_dir: Path) -> str:
 # --- ルール (スコープフィルタリング) ---
 
 
-def _collect_rules(rules_dir: Path, task_type: str) -> str:
+def _collect_rules(rules_dir: Path, task_types: list[str]) -> str:
     """プロジェクトルールをスコープフィルタリング付きでロードする。
 
-    ルールファイル内の `適用:` メタデータを読み、task_type に合致するものだけ返す。
-    適用メタデータがないルールは全タスクに適用 (all)。
+    ルールファイル内の `適用:` メタデータを読み、task_types のいずれかに
+    合致するものだけ返す。適用メタデータがないルールは全タスクに適用 (all)。
+
+    task_types は包含関係を展開したリスト。例:
+      - layout タスク → ["layout", "ui", "all"]
+      - ui タスク     → ["ui", "all"]
+      - 通常タスク    → ["all"]
     """
     if not rules_dir.exists():
         return ""
@@ -109,14 +116,56 @@ def _collect_rules(rules_dir: Path, task_type: str) -> str:
                 scope = m.group(1).strip().lower()
                 break
 
-        # フィルタリング
-        if scope == "all" or task_type in scope:
+        # フィルタリング: task_types のいずれかが scope に含まれるなら採用
+        if scope == "all" or any(tt in scope for tt in task_types):
             parts.append(content)
 
     return "\n---\n".join(parts)
 
 
-# --- UI 判定 ---
+# --- UI / レイアウト判定 ---
+
+
+def _score_keywords(
+    task_id: str,
+    task_info: dict | None,
+    tp_content: str,
+    id_patterns: list[str],
+    tag_keywords: list[str],
+) -> tuple[int, list[str]]:
+    """タスク ID / タグ / 説明文に含まれるキーワードをスコアリングする。
+
+    _judge_ui と _judge_layout の共通処理。
+    Returns: (score, matched_keywords)
+    """
+    score = 0
+    matched: list[str] = []
+
+    # 1. タスク ID パターン
+    segments = task_id.split("-")
+    for seg in segments:
+        if seg.upper() in id_patterns:
+            score += 3
+            matched.append(seg.lower())
+
+    # 2. TP ページのタグ
+    header = parse_header(tp_content)
+    if header:
+        for tag in header["tags"]:
+            if tag.lower() in tag_keywords:
+                score += 2
+                matched.append(tag.lower())
+
+    # 3. タスク説明文
+    if task_info:
+        name_lower = task_info.get("name", "").lower()
+        for kw in tag_keywords:
+            if kw in name_lower:
+                score += 1
+                if kw not in matched:
+                    matched.append(kw)
+
+    return score, matched
 
 
 def _judge_ui(task_id: str, task_info: dict | None, tp_content: str) -> dict:
@@ -124,34 +173,24 @@ def _judge_ui(task_id: str, task_info: dict | None, tp_content: str) -> dict:
 
     Returns: {"is_ui": bool, "docs_keywords": list[str]}
     """
-    score = 0
-    docs_keywords = []
+    score, matched = _score_keywords(
+        task_id, task_info, tp_content, UI_ID_PATTERNS, UI_TAG_KEYWORDS
+    )
+    return {"is_ui": score >= 2, "docs_keywords": list(set(matched))}
 
-    # 1. タスク ID パターン
-    segments = task_id.split("-")
-    for seg in segments:
-        if seg.upper() in UI_ID_PATTERNS:
-            score += 3
-            docs_keywords.append(seg.lower())
 
-    # 2. TP ページのタグに UI キーワード
-    header = parse_header(tp_content)
-    if header:
-        for tag in header["tags"]:
-            if tag.lower() in UI_TAG_KEYWORDS:
-                score += 2
-                docs_keywords.append(tag.lower())
+def _judge_layout(task_id: str, task_info: dict | None, tp_content: str) -> dict:
+    """UI タスクの中でさらに「レイアウトタスク」かどうかを判定する。
 
-    # 3. タスク説明文に UI キーワード
-    if task_info:
-        name_lower = task_info.get("name", "").lower()
-        for kw in UI_TAG_KEYWORDS:
-            if kw in name_lower:
-                score += 1
-                if kw not in docs_keywords:
-                    docs_keywords.append(kw)
+    LAYOUT_ID_PATTERNS の語は UI_ID_PATTERNS にも含まれているため、
+    レイアウトタスクは必然的に UI 判定でも true になる (layout ⊂ ui)。
 
-    return {"is_ui": score >= 2, "docs_keywords": list(set(docs_keywords))}
+    Returns: {"is_layout": bool, "docs_keywords": list[str]}
+    """
+    score, matched = _score_keywords(
+        task_id, task_info, tp_content, LAYOUT_ID_PATTERNS, LAYOUT_TAG_KEYWORDS
+    )
+    return {"is_layout": score >= 2, "docs_keywords": list(set(matched))}
 
 
 # --- メイン ---
@@ -179,14 +218,39 @@ def load_task(task_id: str) -> str:
 
     parts.append(f"## タスク計画\n\n{tp_content}")
 
-    # --- UI 判定 ---
+    # --- UI / レイアウト判定 ---
+    # layout ⊂ ui の包含関係で 3 値化する。
+    #   layout タスク → task_type="layout", task_types=["layout","ui","all"]
+    #   ui タスク     → task_type="ui",     task_types=["ui","all"]
+    #   それ以外      → task_type="all",    task_types=["all"]
     ui_result = _judge_ui(task_id, task_info, tp_content)
-    task_type = "ui" if ui_result["is_ui"] else "all"
+    layout_result = _judge_layout(task_id, task_info, tp_content)
 
-    if ui_result["is_ui"]:
-        parts.append(f"## UI 判定: UI タスク (キーワード: {', '.join(ui_result['docs_keywords'])})")
+    if layout_result["is_layout"]:
+        task_type = "layout"
+        task_types = ["layout", "ui", "all"]
+    elif ui_result["is_ui"]:
+        task_type = "ui"
+        task_types = ["ui", "all"]
+    else:
+        task_type = "all"
+        task_types = ["all"]
 
-        # docs 検索
+    if task_type == "layout":
+        # layout と ui のキーワードをマージして表示・docs 検索に使う
+        merged_keywords = list(set(layout_result["docs_keywords"] + ui_result["docs_keywords"]))
+        parts.append(
+            f"## レイアウト判定: レイアウトタスク (キーワード: {', '.join(merged_keywords)})"
+        )
+        if merged_keywords:
+            doc_results = docs_search(merged_keywords, max_results=10)
+            if doc_results:
+                doc_lines = [f"- {r['path']} (score: {r['score']})" for r in doc_results]
+                parts.append(f"## 関連ドキュメント\n\n" + "\n".join(doc_lines))
+    elif task_type == "ui":
+        parts.append(
+            f"## UI 判定: UI タスク (キーワード: {', '.join(ui_result['docs_keywords'])})"
+        )
         if ui_result["docs_keywords"]:
             doc_results = docs_search(ui_result["docs_keywords"], max_results=10)
             if doc_results:
@@ -220,7 +284,7 @@ def load_task(task_id: str) -> str:
                 parts.append(f"## 関連ページ (他セクション)\n\n" + "\n---\n".join(related_lines))
 
     # --- ルール (スコープフィルタリング) ---
-    rules_content = _collect_rules(RULES_DIR, task_type)
+    rules_content = _collect_rules(RULES_DIR, task_types)
     if rules_content:
         parts.append(f"## プロジェクトルール\n\n{rules_content}")
 

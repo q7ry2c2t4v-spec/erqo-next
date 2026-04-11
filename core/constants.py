@@ -20,7 +20,11 @@ HISTORY_DIR_NAME = "history"
 
 # --- .libs/ 配下の棚名 ---
 
-LIBS_SHELVES = ["design", "features", "docs", "research", "rules", "session-logs", "storybook", "archive"]
+STORYBOOK_SHELF_NAME = "storybook"
+LIBS_SHELVES = [
+    "design", "features", "docs", "research", "rules", "session-logs",
+    STORYBOOK_SHELF_NAME, "archive",
+]
 
 # --- ファイル名 ---
 
@@ -110,7 +114,13 @@ PIPELINE_STEPS = [
     "commit",         # 5. コミット
 ]
 
-# --- レイアウト判定 (UI 判定の中でレイアウトタスクを特定する) ---
+# --- UI / レイアウト判定キーワード ---
+# load.py の _judge_ui / _judge_layout がスコアリングで参照する。
+# LAYOUT は UI のサブタイプ (layout ⊂ ui) — LAYOUT_ID_PATTERNS の語は
+# UI_ID_PATTERNS にも含め、レイアウトタスクが UI 判定でも true になるようにする。
+
+UI_ID_PATTERNS = ["UI", "CARD", "VIEWER", "THEME", "COLOR", "LAYOUT", "NAV", "PAGE"]
+UI_TAG_KEYWORDS = ["ui", "コンポーネント", "レイアウト", "画面", "component", "layout", "page"]
 
 LAYOUT_ID_PATTERNS = ["LAYOUT", "PAGE", "CLONE", "DESIGN"]
 LAYOUT_TAG_KEYWORDS = [
@@ -130,6 +140,33 @@ LAYOUT_SUBSTEPS = [
     "build",      # 5. 部品実装 (.tsx + .stories.tsx 生成)
     "assemble",   # 6. ページ統合 (page.tsx + SEO)
     "baseline",   # 7. VRT 基準作成 (pixel-perfect 基準スクショ)
+]
+
+# --- レイアウトサブパイプラインの入力ファイル ---
+# .libs/storybook/<task-slug>/input.md に置かれる取材入力。
+# 「本棚ページが正本」原則 (RSRC-WEBCLONE-CODI-INTEGRATION 決定事項 3) に基づき、
+# 参考サイト URL / 要望 / メモを 1 ファイルに集約する。
+
+STORYBOOK_INPUT_FILENAME = "input.md"
+RECON_REFERENCE_SECTION_SUFFIX = ".参考サイト"
+RECON_REQUEST_SECTION_SUFFIX = ".要望"
+RECON_NOTE_SECTION_SUFFIX = ".メモ"
+
+# --- recon B: Playwright スクショ取得 ---
+# `.libs/storybook/<task-slug>/recon/` 配下に取材成果物を配置する。
+
+RECON_OUTPUT_DIR_NAME = "recon"
+RECON_DESKTOP_VIEWPORT = (1440, 900)
+RECON_MOBILE_VIEWPORT = (390, 844)
+RECON_SCREENSHOT_DESKTOP_FILENAME = "screenshot-desktop.png"
+RECON_SCREENSHOT_MOBILE_FILENAME = "screenshot-mobile.png"
+RECON_PLAYWRIGHT_TIMEOUT_SEC = 60
+
+# recon C で取材する解像度のリスト。(名前, viewport, 出力ファイル名) の順。
+# 将来 tablet 等を追加する場合はこのリストに行を足すだけで拡張できる。
+RECON_VIEWPORTS = [
+    ("desktop", RECON_DESKTOP_VIEWPORT, RECON_SCREENSHOT_DESKTOP_FILENAME),
+    ("mobile",  RECON_MOBILE_VIEWPORT,  RECON_SCREENSHOT_MOBILE_FILENAME),
 ]
 
 # --- 外部 URL ---
