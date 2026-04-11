@@ -3,9 +3,14 @@
 状態ファイルの作成・更新・読取・削除を行う。
 atomic write (fsync + rename) で中断安全性を保証する。
 
+レイアウトタスク (LAYOUT-* / PAGE-* / CLONE-* / DESIGN-*) は自動的に
+サブステップ追跡フィールド (layout_substep / completed_substeps) を
+状態ファイルに持つ。完了は `complete_substep` で記録する。
+
 使い方:
     python .nxt-core/core/state.py TASK-ID init
     python .nxt-core/core/state.py TASK-ID complete STEP
+    python .nxt-core/core/state.py TASK-ID complete_substep SUBSTEP
     python .nxt-core/core/state.py TASK-ID get
     python .nxt-core/core/state.py TASK-ID delete
 """
@@ -31,6 +36,8 @@ from constants import (
     STATUS_DONE,
     STATE_FILE_PREFIX,
     PIPELINE_STEPS,
+    LAYOUT_ID_PATTERNS,
+    LAYOUT_SUBSTEPS,
 )
 from page_parser import parse_tp_row
 from feedback import init_error_handling
@@ -41,6 +48,17 @@ init_error_handling()
 def _state_file(task_id: str) -> Path:
     """状態ファイルのパスを返す。"""
     return STATE_DIR / f"{STATE_FILE_PREFIX}{task_id}.json"
+
+
+def _is_layout_task(task_id: str) -> bool:
+    """task_id の ID パターンから機械的にレイアウトタスクかを判定する。
+
+    load.py の _judge_layout はタグも参照するが、state.py は IS_SOURCE でも
+    動く必要があるので ID パターン検査のみ。LAYOUT-* / PAGE-* / CLONE-* /
+    DESIGN-* 規約で運用する前提。
+    """
+    segments = task_id.split("-")
+    return any(seg.upper() in LAYOUT_ID_PATTERNS for seg in segments)
 
 
 def _now_iso() -> str:
@@ -112,8 +130,13 @@ def check_deps(task_id: str) -> list[str]:
 
 
 def init(task_id: str) -> None:
-    """パイプライン開始時に状態ファイルを作成する。"""
+    """パイプライン開始時に状態ファイルを作成する。
+
+    task_id がレイアウトタスク (LAYOUT-* / PAGE-* / CLONE-* / DESIGN-*) なら
+    layout_substep / completed_substeps フィールドも初期化する。
+    """
     path = _state_file(task_id)
+    is_layout = _is_layout_task(task_id)
 
     # 既存の状態ファイルがあれば中断復旧モード
     existing = _read_state(task_id)
@@ -123,6 +146,13 @@ def init(task_id: str) -> None:
         print("codi_state: 既存の状態ファイルを検出 (中断復旧)")
         print(f"  完了済み: {', '.join(completed) if completed else 'なし'}")
         print(f"  次のステップ: {PIPELINE_STEPS[step_num] if step_num < len(PIPELINE_STEPS) else '全完了'}")
+        if "layout_substep" in existing:
+            completed_subs = existing.get("completed_substeps", [])
+            current_sub = existing.get("layout_substep")
+            print(
+                f"  レイアウトサブステップ: {current_sub or '全完了'} "
+                f"(完了済み: {', '.join(completed_subs) if completed_subs else 'なし'})"
+            )
         print(json.dumps(existing, ensure_ascii=False))
         return
 
@@ -131,7 +161,7 @@ def init(task_id: str) -> None:
     if incomplete:
         print(f"codi_state: 警告 - 未完了の依存タスクがあります: {', '.join(incomplete)}")
 
-    state = {
+    state: dict = {
         "task_id": task_id,
         "current_step": 1,
         "completed_steps": [],
@@ -139,8 +169,17 @@ def init(task_id: str) -> None:
         "last_update": _now_iso(),
     }
 
+    if is_layout:
+        state["layout_substep"] = LAYOUT_SUBSTEPS[0]
+        state["completed_substeps"] = []
+
     _atomic_write_json(path, state)
     print(f"codi_state: 状態ファイル作成 -> {path}")
+    if is_layout:
+        print(
+            f"  レイアウトタスク: サブステップ追跡を有効化 "
+            f"(開始: {LAYOUT_SUBSTEPS[0]})"
+        )
 
 
 def complete(task_id: str, step_name: str) -> None:
@@ -168,6 +207,57 @@ def complete(task_id: str, step_name: str) -> None:
     print(f"codi_state: {step_name} 完了を記録 ({len(completed)}/{len(PIPELINE_STEPS)})")
 
 
+def complete_substep(task_id: str, substep_name: str) -> None:
+    """レイアウトタスクのサブステップ完了を記録する。
+
+    completed_substeps に追加し、layout_substep を次のサブステップに進める。
+    最後のサブステップが完了したら layout_substep は None になる。
+    """
+    if substep_name not in LAYOUT_SUBSTEPS:
+        print(f"エラー: 不明なサブステップ '{substep_name}'", file=sys.stderr)
+        print(f"有効なサブステップ: {', '.join(LAYOUT_SUBSTEPS)}", file=sys.stderr)
+        sys.exit(1)
+
+    state = _read_state(task_id)
+    if state is None:
+        print(
+            f"エラー: {task_id} の状態ファイルがありません。先に init してください。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if "layout_substep" not in state:
+        print(
+            f"エラー: {task_id} はレイアウトタスクとして init されていません。"
+            "(ID に LAYOUT/PAGE/CLONE/DESIGN のいずれかを含める必要があります)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    completed = state.get("completed_substeps", [])
+    if substep_name not in completed:
+        completed.append(substep_name)
+    state["completed_substeps"] = completed
+
+    # 次の substep を設定 (最後のサブステップが完了したら None)
+    idx = LAYOUT_SUBSTEPS.index(substep_name)
+    if idx + 1 < len(LAYOUT_SUBSTEPS):
+        state["layout_substep"] = LAYOUT_SUBSTEPS[idx + 1]
+    else:
+        state["layout_substep"] = None
+
+    state["last_update"] = _now_iso()
+    _atomic_write_json(_state_file(task_id), state)
+    print(
+        f"codi_state: layout サブステップ {substep_name} 完了 "
+        f"({len(completed)}/{len(LAYOUT_SUBSTEPS)})"
+    )
+    if state["layout_substep"]:
+        print(f"  次のサブステップ: {state['layout_substep']}")
+    else:
+        print("  全サブステップ完了")
+
+
 def get(task_id: str) -> None:
     """現在の状態を JSON で出力する。"""
     state = _read_state(task_id)
@@ -189,7 +279,11 @@ def delete(task_id: str) -> None:
 
 def main() -> None:
     if len(sys.argv) < 3:
-        print("usage: python core/state.py TASK-ID [init|complete STEP|get|delete]", file=sys.stderr)
+        print(
+            "usage: python core/state.py TASK-ID "
+            "[init|complete STEP|complete_substep SUB|get|delete]",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     task_id = sys.argv[1].upper()
@@ -202,6 +296,14 @@ def main() -> None:
             print("usage: python core/state.py TASK-ID complete STEP", file=sys.stderr)
             sys.exit(1)
         complete(task_id, sys.argv[3])
+    elif action == "complete_substep":
+        if len(sys.argv) < 4:
+            print(
+                "usage: python core/state.py TASK-ID complete_substep SUBSTEP",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        complete_substep(task_id, sys.argv[3])
     elif action == "get":
         get(task_id)
     elif action == "delete":

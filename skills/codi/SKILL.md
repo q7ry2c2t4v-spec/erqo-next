@@ -67,7 +67,68 @@ python "{nxt}/core/state.py" $ARGUMENTS complete prepare
 - プロジェクトルールを遵守すること
 - 承認フロー: 実装方針をユーザーに提示し「これで実装していいですか？ (y/n)」で承認を得る
 
-完了後:
+#### 2-A. 通常タスク (UI / API / その他)
+
+承認後、ステップ 1 で収集したコンテキストに従って直接実装する。
+
+#### 2-B. レイアウトタスク (LAYOUT / PAGE / CLONE / DESIGN)
+
+task_id が `LAYOUT-*` / `PAGE-*` / `CLONE-*` / `DESIGN-*` のいずれかで始まる場合、
+ステップ 2 は `clone.py` の **7 サブステップ** に自動展開される。`state.py` が
+`layout_substep` フィールドでサブステップ進捗を追跡する。
+
+**事前準備:** ユーザーが取材入力ファイルを用意していること。
+```
+.libs/storybook/<task-slug>/input.md
+```
+`## <TASK-ID>.参考サイト` / `## <TASK-ID>.要望` / `## <TASK-ID>.メモ` の
+3 セクションを持つ Markdown。URL ゼロでも要望があれば「テキストだけモード」で進行する。
+
+**7 サブステップを順に実行する:**
+
+```bash
+# 2-1. 取材 (Node + Playwright で参考サイトから 6 項目取材 + スクショ)
+python "{nxt}/core/clone.py" recon $ARGUMENTS
+python "{nxt}/core/state.py" $ARGUMENTS complete_substep recon
+
+# 2-2. 本棚化 (元サイト実値だけで本棚ページの下書きを作る)
+python "{nxt}/core/clone.py" dump $ARGUMENTS
+python "{nxt}/core/state.py" $ARGUMENTS complete_substep dump
+
+# 2-3. 要望適用 (「要望反映指示」セクションを本棚ページに追記)
+python "{nxt}/core/clone.py" apply $ARGUMENTS
+python "{nxt}/core/state.py" $ARGUMENTS complete_substep apply
+
+# 2-4. ルール適用 (Tailwind v4 @theme トークン定義 + iOS 対応)
+python "{nxt}/core/clone.py" rules $ARGUMENTS
+python "{nxt}/core/state.py" $ARGUMENTS complete_substep rules
+
+# 2-5. 部品実装 (本棚ページのビルド指示 + 雛形を読み .tsx / .stories.tsx を書く)
+python "{nxt}/core/clone.py" build $ARGUMENTS
+# → AI がここで本棚ページを読み、実際の .tsx / .stories.tsx を src/components/<slug>/ に作成
+python "{nxt}/core/state.py" $ARGUMENTS complete_substep build
+
+# 2-6. ページ統合 (page.tsx 組み込み + Next.js Metadata + JSON-LD)
+python "{nxt}/core/clone.py" assemble $ARGUMENTS
+# → AI が assemble 指示セクションを読んで実際に page.tsx を編集
+python "{nxt}/core/state.py" $ARGUMENTS complete_substep assemble
+
+# 2-7. VRT 基準スクショ (pixel-perfect threshold:0 基準を保存)
+python "{nxt}/core/clone.py" baseline $ARGUMENTS
+# → AI が Storybook + playwright vrt --update-snapshots で基準を更新
+python "{nxt}/core/state.py" $ARGUMENTS complete_substep baseline
+```
+
+**重要:**
+- 各サブステップは **本棚ページ (`.libs/storybook/<slug>/<slug>.md`) が正本**。`.tsx` / `.stories.tsx` を直接編集してはいけない (修正は必ず input.md → recon/apply から)。
+- 冪等: 途中で要望を変えた場合、`input.md` を編集し apply / rules / build を再実行すれば本棚ページが最新化される。
+- 各サブステップ完了時に `state.py complete_substep` を呼び、`layout_substep` を次に進める。
+
+#### 2 共通: 完了記録
+
+全サブステップ (レイアウトタスクの場合) または通常実装 (通常タスクの場合) が
+終わったら、ステップ 2 自体の完了を記録する:
+
 ```bash
 python "{nxt}/core/state.py" $ARGUMENTS complete implementation
 ```

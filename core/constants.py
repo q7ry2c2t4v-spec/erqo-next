@@ -152,22 +152,42 @@ RECON_REFERENCE_SECTION_SUFFIX = ".参考サイト"
 RECON_REQUEST_SECTION_SUFFIX = ".要望"
 RECON_NOTE_SECTION_SUFFIX = ".メモ"
 
-# --- recon B: Playwright スクショ取得 ---
+# --- recon: Playwright / Node スクリプト取材 ---
 # `.libs/storybook/<task-slug>/recon/` 配下に取材成果物を配置する。
+# 複数 URL のときは site-1 / site-2 ... のサブディレクトリに分けて保存する。
 
 RECON_OUTPUT_DIR_NAME = "recon"
+RECON_SITE_DIR_PREFIX = "site-"
 RECON_DESKTOP_VIEWPORT = (1440, 900)
 RECON_MOBILE_VIEWPORT = (390, 844)
 RECON_SCREENSHOT_DESKTOP_FILENAME = "screenshot-desktop.png"
 RECON_SCREENSHOT_MOBILE_FILENAME = "screenshot-mobile.png"
+RECON_JSON_DESKTOP_FILENAME = "recon-desktop.json"
+RECON_JSON_MOBILE_FILENAME = "recon-mobile.json"
 RECON_PLAYWRIGHT_TIMEOUT_SEC = 60
+RECON_NODE_TIMEOUT_SEC = 120
 
-# recon C で取材する解像度のリスト。(名前, viewport, 出力ファイル名) の順。
+# recon で取材する解像度のリスト。(名前, viewport, screenshot ファイル名, JSON ファイル名) の順。
 # 将来 tablet 等を追加する場合はこのリストに行を足すだけで拡張できる。
 RECON_VIEWPORTS = [
-    ("desktop", RECON_DESKTOP_VIEWPORT, RECON_SCREENSHOT_DESKTOP_FILENAME),
-    ("mobile",  RECON_MOBILE_VIEWPORT,  RECON_SCREENSHOT_MOBILE_FILENAME),
+    ("desktop", RECON_DESKTOP_VIEWPORT,
+     RECON_SCREENSHOT_DESKTOP_FILENAME, RECON_JSON_DESKTOP_FILENAME),
+    ("mobile",  RECON_MOBILE_VIEWPORT,
+     RECON_SCREENSHOT_MOBILE_FILENAME,  RECON_JSON_MOBILE_FILENAME),
 ]
+
+# --- recon: Node スクリプト (clone_node) 配置 ---
+# core/ 直下を Python のみに保つため、.mjs ファイルはサブディレクトリに置く。
+# giget 配布で .nxt-core/core/clone_node/ に自動でコピーされる。
+
+RECON_NODE_DIR_NAME = "clone_node"
+RECON_NODE_SCRIPT_FILENAME = "recon.mjs"
+
+# --- recon: テキストだけモード ---
+# input.md に参考 URL がゼロでも要望セクションがあれば続行する。
+# 本棚ページの雛形は dump 段階で生成し、recon は「URL なしで完了」扱いで抜ける。
+
+RECON_TEXT_ONLY_MARKER_FILENAME = "text-only.json"
 
 # --- 外部 URL ---
 
