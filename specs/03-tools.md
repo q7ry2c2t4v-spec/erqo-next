@@ -2,31 +2,34 @@
 
 ## 構成
 
+本元リポジトリでは下記ツリーが**ルート直下**にあり、プロジェクトでは `.nxt-core/` 配下にある。以下では場所に依存しない形で記載する。
+
 ```
-.nxt-core/
-├── core/          ← コアモジュール（全スクリプトの土台）
-│   ├── constants.py   ← 固定値の一元管理
-│   ├── paths.py       ← パス定数（constants 由来）
-│   ├── feedback.py
-│   ├── page_parser.py
-│   ├── index.py
-│   ├── docs.py
-│   ├── install.py     ← プロジェクト用セットアップ
-│   ├── dev.py         ← 本体リポジトリ用セットアップ（IS_SOURCE 限定）
-│   ├── git_ops.py     ← git 操作ヘルパー（/wrap, /codi, /aud 共通）
-│   ├── stage_ops.py   ← 自動ステージング（/wrap 用、ブラックリスト機械適用）
-│   ├── write_guard.py ← PreToolUse Hook 用、保護パス書き込みを事前ブロック
-│   ├── session.py
-│   ├── state.py
-│   ├── load.py
-│   └── record.py
-└── skills/        ← スキル定義（SKILL.md ＋ 必要に応じて handler.py）
-    └── fb/handler.py
+core/          ← コアモジュール（全スクリプトの土台）
+├── constants.py   ← 固定値の一元管理
+├── paths.py       ← パス定数（constants 由来）
+├── feedback.py
+├── page_parser.py
+├── index.py
+├── docs.py
+├── install.py     ← プロジェクト用セットアップ
+├── dev.py         ← 本体リポジトリ用セットアップ（IS_SOURCE 限定）
+├── git_ops.py     ← git 操作ヘルパー（/wrap, /codi, /aud 共通）
+├── stage_ops.py   ← 自動ステージング（/wrap 用、ブラックリスト機械適用）
+├── write_guard.py ← PreToolUse Hook 用、保護パス書き込みを事前ブロック
+├── session.py
+├── state.py
+├── load.py
+└── record.py
+
+skills/        ← スキル定義（SKILL.md ＋ 必要に応じて handler.py）
+└── fb/handler.py
 ```
 
-## プロジェクト固有スクリプトの配置ルール
+## 編集ルール
 
-**`.nxt-core/` は読み取り専用。** プロジェクト固有のスクリプトは `scripts/` に作成する。
+- **本元リポジトリ:** `core/`, `skills/` を直接編集する（システム調整はこちらで行う）
+- **プロジェクト:** `.nxt-core/core/`, `.nxt-core/skills/` は**読み取り専用**。プロジェクト固有のスクリプトは `scripts/` に作成する
 
 ## コアモジュール
 
