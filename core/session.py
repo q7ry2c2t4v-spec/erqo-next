@@ -238,9 +238,33 @@ def extract_decisions(log_path: Path) -> str | None:
 # --- コンテキスト構築 ---
 
 
+def build_orientation_gate() -> str:
+    """視点宣言ゲート: セッション開始時に必ず視点とスコープを宣言させる。
+
+    specs/07-scopes.md の 3 スコープ判断を毎セッション冒頭で能動的に照合させ、
+    本元 / プロジェクトの取り違えによる致命的な副作用を防ぐ。
+    """
+    if IS_SOURCE:
+        repo_label = "本元 OS (IS_SOURCE=True)"
+    else:
+        repo_label = "プロジェクト OS (IS_SOURCE=False)"
+
+    return (
+        "# 視点宣言ゲート (必須)\n"
+        f"現在のリポジトリ: {repo_label}\n"
+        "\n"
+        "最初の応答の冒頭で、以下を必ず記載してから作業に入ること:\n"
+        "- 視点: 本元 OS / プロジェクト OS\n"
+        "- 依頼のスコープ: 本元 / プロジェクト / 共通\n"
+        "- 根拠: (なぜそう判断したか一言)\n"
+        "\n"
+        "この宣言が済むまで一切の実作業に進まない。"
+    )
+
+
 def build_normal_context() -> str:
-    """通常モード: 全7項目を収集。"""
-    parts = []
+    """通常モード: 視点宣言ゲート + 全7項目を収集。"""
+    parts = [build_orientation_gate()]
 
     # 1. プロジェクト名
     if PROJECT_ROOT and not IS_SOURCE:
@@ -294,8 +318,8 @@ def build_normal_context() -> str:
 
 
 def build_compact_context() -> str:
-    """compact モード: 中断パイプライン + 進行中タスク + 直近決定事項。"""
-    parts = []
+    """compact モード: 視点宣言ゲート + 中断パイプライン + 進行中タスク + 直近決定事項。"""
+    parts = [build_orientation_gate()]
 
     # 1. 中断パイプライン
     interrupted = find_interrupted_pipelines()
