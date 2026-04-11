@@ -36,6 +36,7 @@ from constants import (
     SETTINGS_FILENAME,
     SKILL_MD_FILENAME,
     SKILLS_DIR_NAME,
+    SOURCE_EXCLUDED_SKILLS,
     STATE_DIR_NAME,
     UI_SPECS_DIR_NAME,
 )
@@ -221,13 +222,18 @@ def setup_permission_defaults(project_root: Path) -> bool:
 
 
 def _scan_skills() -> list[str]:
-    """NXT_ROOT/skills/ 内のスキルを自動スキャンする。"""
+    """NXT_ROOT/skills/ 内のスキルを自動スキャンする。
+
+    本元（IS_SOURCE）では SOURCE_EXCLUDED_SKILLS に列挙されたスキルを除外する。
+    プロジェクト側では全スキルを返す。
+    """
     skills_dir = NXT_ROOT / SKILLS_DIR_NAME
     if not skills_dir.exists():
         return []
+    excluded = SOURCE_EXCLUDED_SKILLS if IS_SOURCE else frozenset()
     return sorted(
         d.name for d in skills_dir.iterdir()
-        if d.is_dir() and (d / SKILL_MD_FILENAME).exists()
+        if d.is_dir() and (d / SKILL_MD_FILENAME).exists() and d.name not in excluded
     )
 
 

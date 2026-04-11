@@ -10,3 +10,4 @@
 @specs/06-coding-rules.md
 @specs/07-scopes.md
 @specs/08-responsibility.md
+@specs/09-memory.md

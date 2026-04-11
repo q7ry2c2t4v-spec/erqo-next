@@ -41,6 +41,12 @@ TP_FILE_PATTERN = "tp-*.md"
 SESSION_LOG_PATTERN = "slog-*.md"
 STATE_FILE_PREFIX = "codi_"
 
+# --- 本元（IS_SOURCE）でのみ除外するスキル ---
+# プロジェクト側には引き続き全スキルが配信される。
+# 本元では使う場面がないスキルをここに列挙し、_scan_skills() がフィルタする。
+
+SOURCE_EXCLUDED_SKILLS = frozenset({"dsgn", "tp", "codi"})
+
 # --- インストール時の生成物 ---
 
 QA_CONFIG_TEMPLATES = ["eslint.config.mjs", "playwright.config.ts", "lighthouserc.js"]
