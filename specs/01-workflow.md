@@ -70,6 +70,7 @@
 - **記録は `/wrap` のセッションログに集約:** `.libs/features/` への記録も不要。「何を変えたか / なぜ変えたか / 決定事項」はセッションログに書く
 - **自動品質チェック（tsc/eslint/playwright 等）は対象外:** 本元リポジトリは Python スクリプトと Markdown が中心で、Next.js プロジェクト向けのチェックとは目的が違う
 - **`giget` 経由での配布が前提:** 本元で加えた変更は `core/`, `skills/`, `specs/` として各プロジェクトに配布される。プロジェクト側で動くことを念頭に置いて編集する
+- **コード編集前にコーディングルールを必ずロード:** `core/`, `skills/`, `scripts/` 配下のコードファイル (`.py` / `.ts` / `.tsx` 等) を編集する前に `python core/coding_rules.py <対象ファイル>` を実行し、返ってきたルールファイル (L1 ハブ + 該当 L2 / L3) を**全て Read してから編集に入る**。判定は `core/coding_rules.py` が機械的に行うため AI の自己判断は挟まない (`specs/06-coding-rules.md` §0 / `specs/08-responsibility.md`)。`PreToolUse` Hook の `coding_rules_hook.py` が編集直前に該当ルールを stderr に通知するため、Hook 出力を見落とさない
 
 ### 本元で使えるスキル一覧
 

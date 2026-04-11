@@ -67,6 +67,27 @@ python "{nxt}/core/state.py" $ARGUMENTS complete prepare
 - プロジェクトルールを遵守すること
 - 承認フロー: 実装方針をユーザーに提示し「これで実装していいですか？ (y/n)」で承認を得る
 
+**必須: コーディングルールの事前ロード**
+
+実際にファイルを編集する前に、対象ファイルのパスを `coding_rules.py` に渡して
+適用ルールを機械判定し、返ってきたルールファイルを**全て Read してから編集に入る**:
+
+```bash
+python "{nxt}/core/coding_rules.py" <編集対象のファイルパス>
+```
+
+出力例:
+```
+specs/06-coding-rules.md                 (L1 汎用 — 常時適用)
+specs/coding/l2-typescript.md            (L2 TypeScript)
+specs/coding/l3-nextjs.md                (L3 Next.js)
+```
+
+判定は機械的に行われるため AI の自己判断は挟まない (`specs/06-coding-rules.md` §0
+/ `specs/08-responsibility.md`)。さらに `PreToolUse` Hook の `coding_rules_hook.py`
+が `Write` / `Edit` / `NotebookEdit` 実行直前に同じルール一覧を stderr に通知する
+ため、見落とさず必ず Read すること。
+
 #### 2-A. 通常タスク (UI / API / その他)
 
 承認後、ステップ 1 で収集したコンテキストに従って直接実装する。

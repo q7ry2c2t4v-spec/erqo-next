@@ -44,6 +44,11 @@
             "type": "command",
             "command": "python \"$CLAUDE_PROJECT_DIR/./core/write_guard.py\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/./core/coding_rules_hook.py\"",
+            "timeout": 5
           }
         ]
       }

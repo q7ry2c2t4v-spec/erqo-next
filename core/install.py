@@ -103,11 +103,18 @@ def _hook_config(nxt_path: str) -> dict:
         "PreToolUse": [
             {
                 "matcher": "Write|Edit|NotebookEdit",
-                "hooks": [{
-                    "type": "command",
-                    "command": f'python "$CLAUDE_PROJECT_DIR/{nxt_path}/core/write_guard.py"',
-                    "timeout": 5,
-                }],
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f'python "$CLAUDE_PROJECT_DIR/{nxt_path}/core/write_guard.py"',
+                        "timeout": 5,
+                    },
+                    {
+                        "type": "command",
+                        "command": f'python "$CLAUDE_PROJECT_DIR/{nxt_path}/core/coding_rules_hook.py"',
+                        "timeout": 5,
+                    },
+                ],
             },
         ],
     }
@@ -175,11 +182,23 @@ def setup_hooks(project_root: Path) -> bool:
     added_total = 0
     for hook_type, hook_entries in hook_config.items():
         existing_entries = hooks.setdefault(hook_type, [])
-        existing_matchers = {entry.get("matcher", "") for entry in existing_entries}
+        existing_by_matcher = {entry.get("matcher", ""): entry for entry in existing_entries}
         for hook_entry in hook_entries:
-            if hook_entry["matcher"] not in existing_matchers:
+            matcher = hook_entry["matcher"]
+            new_hooks = hook_entry.get("hooks", [])
+            if matcher not in existing_by_matcher:
+                # 新規 matcher: エントリごと追加
                 existing_entries.append(hook_entry)
-                added_total += 1
+                added_total += len(new_hooks)
+            else:
+                # 既存 matcher: hooks 配列内のコマンドをコマンド単位でマージ
+                existing_entry = existing_by_matcher[matcher]
+                existing_hook_list = existing_entry.setdefault("hooks", [])
+                existing_commands = {h.get("command", "") for h in existing_hook_list}
+                for new_hook in new_hooks:
+                    if new_hook.get("command", "") not in existing_commands:
+                        existing_hook_list.append(new_hook)
+                        added_total += 1
 
     settings_path.write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + "\n",

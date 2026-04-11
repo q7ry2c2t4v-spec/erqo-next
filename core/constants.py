@@ -18,6 +18,9 @@ TEMPLATES_DIR_NAME = "templates"
 FEEDBACK_DIR_NAME = "feedback"
 HISTORY_DIR_NAME = "history"
 
+# specs/ サブディレクトリ
+CODING_DIR_NAME = "coding"
+
 # --- .libs/ 配下の棚名 ---
 
 STORYBOOK_SHELF_NAME = "storybook"
@@ -38,6 +41,16 @@ INDEX_FILENAME = "_index.json"
 OS_SKILLS_FILENAME = "_os_skills.json"
 VERSION_CHECK_FILENAME = "_version_check.json"
 TAG_ALIASES_FILENAME = "tag_aliases.json"
+
+# --- コーディングルール分割ファイル ---
+# specs/06-coding-rules.md (ハブ) と specs/coding/ 配下の層別ファイル。
+# core/coding_rules.py がファイルパスから適用ルールを機械判定する。
+
+CODING_HUB_FILENAME = "06-coding-rules.md"
+CODING_L2_PYTHON_FILENAME = "l2-python.md"
+CODING_L2_TYPESCRIPT_FILENAME = "l2-typescript.md"
+CODING_L3_NEXTJS_FILENAME = "l3-nextjs.md"
+CODING_L3_CLOUDFLARE_FILENAME = "l3-cloudflare.md"
 
 # --- ファイル名パターン ---
 
@@ -188,6 +201,41 @@ RECON_NODE_SCRIPT_FILENAME = "recon.mjs"
 # 本棚ページの雛形は dump 段階で生成し、recon は「URL なしで完了」扱いで抜ける。
 
 RECON_TEXT_ONLY_MARKER_FILENAME = "text-only.json"
+
+# --- コーディングルール判定 (coding_rules.py) ---
+# ファイル拡張子からカテゴリを機械判定するための定数。
+# AI の自己判断を排除する (specs/08-responsibility.md)。
+
+PYTHON_FILE_EXTENSIONS = (".py",)
+TYPESCRIPT_FILE_EXTENSIONS = (".ts", ".tsx", ".mts", ".cts")
+
+# プロジェクトルート直下にあれば Next.js プロジェクトと判定するマーカー
+NEXTJS_MARKER_FILES = (
+    "next.config.ts",
+    "next.config.mjs",
+    "next.config.js",
+)
+
+# プロジェクトルート直下にあれば Cloudflare Workers プロジェクトと判定するマーカー
+CLOUDFLARE_MARKER_FILES = (
+    "wrangler.jsonc",
+    "wrangler.json",
+    "wrangler.toml",
+)
+
+# パス部に含まれていれば Cloudflare Workers と判定するディレクトリ名
+WORKERS_DIR_NAME = "workers"
+
+# --- coding_rules_hook.py: PreToolUse 出力フォーマット ---
+# Hook が stderr に出すメッセージ。L2/L3 が増えた時 (= L1 だけでない時) のみ
+# 出力する。L1 のみ (=コードでない) なら何も出さない (ノイズ防止)。
+
+CODING_RULES_HOOK_HEADER = (
+    "## 適用コーディングルール (実装前に必ず Read してください)"
+)
+CODING_RULES_HOOK_FOOTER = (
+    "詳細: specs/06-coding-rules.md §0 適用マトリックス / specs/08-responsibility.md"
+)
 
 # --- 外部 URL ---
 
