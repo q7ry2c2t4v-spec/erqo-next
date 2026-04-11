@@ -30,6 +30,7 @@
 | `research/` | ウェブリサーチの調査結果 | /rsrc |
 | `rules/` | プロジェクトルール | /ruru |
 | `session-logs/` | セッションログ | /wrap |
+| `storybook/` | Storybook 部品の本棚正本 (1 部品 = 1 ページ) | /codi (レイアウト分岐) |
 | `archive/` | アーカイブ | 自動 |
 
 ### 復元可能性の原則

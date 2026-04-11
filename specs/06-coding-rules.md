@@ -26,8 +26,38 @@
 
 ## 適用範囲
 
-- 対象: `core/`, `skills/`, `scripts/` 配下の全 Python コード
+- 対象 (Python): `core/`, `skills/`, `scripts/` 配下の全 Python コード
+- 対象 (フロントエンド): `src/` 配下の TS/TSX (Next.js プロジェクトの場合) — 詳細は「フロントエンド (TS/TSX) 向けルール」セクション
 - 既存コードは、該当箇所を編集する際に合わせて修正する（全面リファクタの義務化はしない）
+
+## フロントエンド (TS/TSX) 向けルール
+
+Next.js プロジェクトの `src/` 配下の TS/TSX にも、ハードコーディング禁止の原則を拡張する。
+ウェブクローンや UI 実装で「最高精度の再現」を保証するため、すべてのデザイン値を Tailwind v4 の `@theme` トークン経由で扱う。
+
+### 禁止される書き方
+
+- 直書き色値: `style={{ color: '#3b82f6' }}` / `className="bg-[#3b82f6]"`
+- 直書き寸法: `className="p-[17px]"` / `style={{ padding: '17px' }}`
+- 任意値ユーティリティ: `bg-[...]`, `p-[...]` は原則禁止
+
+### 推奨される書き方
+
+- `@theme` トークン経由: `className="bg-extracted-primary p-extracted-17"`
+- トークンは `globals.css` の `@theme` ブロックで一元定義 (元サイトの実値や要望値を登録)
+
+### 例外
+
+- **動的な値 (props/state から計算):** 計算結果を `style` に渡す場合は許容 (例: `style={{ width: progress + '%' }}`)
+- **過渡期の暫定:** リファクタの過渡期で `@theme` 化が間に合わない部分は `// TODO: tokenize` コメント付きで一時的に許容
+
+### 理由
+
+- ウェブクローン時に「どこに何の値があるか」を一元追跡できる
+- 要望の上書きや差し替えが本棚ページから一括で反映できる
+- VRT による pixel-perfect 検証が安定する
+
+詳細な実装パイプラインは `.libs/research/webclone/rsrc-webclone-rules.md` を参照。
 
 ## 違反時の対応
 

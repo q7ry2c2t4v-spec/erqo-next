@@ -20,7 +20,7 @@ HISTORY_DIR_NAME = "history"
 
 # --- .libs/ 配下の棚名 ---
 
-LIBS_SHELVES = ["design", "features", "docs", "research", "rules", "session-logs", "archive"]
+LIBS_SHELVES = ["design", "features", "docs", "research", "rules", "session-logs", "storybook", "archive"]
 
 # --- ファイル名 ---
 
@@ -108,6 +108,28 @@ PIPELINE_STEPS = [
     "verification",   # 3. 検証
     "recording",      # 4. 記録（features + ステータス + ガイド）
     "commit",         # 5. コミット
+]
+
+# --- レイアウト判定 (UI 判定の中でレイアウトタスクを特定する) ---
+
+LAYOUT_ID_PATTERNS = ["LAYOUT", "PAGE", "CLONE", "DESIGN"]
+LAYOUT_TAG_KEYWORDS = [
+    "クローン", "再現", "レイアウト", "デザイン",
+    "clone", "layout", "design", "ui-clone",
+]
+
+# --- レイアウトサブパイプラインのサブステップ ---
+# /codi ステップ 2 (implementation) がレイアウトタスクの場合に展開する 7 サブステップ。
+# 詳細: .libs/research/webclone/rsrc-webclone-codi-integration.md
+
+LAYOUT_SUBSTEPS = [
+    "recon",      # 1. 取材 (Playwright CLI で参考サイトから取得)
+    "dump",       # 2. 本棚化 (.libs/storybook/ に下書き)
+    "apply",      # 3. 要望適用 (元サイト < 要望)
+    "rules",      # 4. ルール適用 (ハードコ禁止 / iOS / Tailwind v4)
+    "build",      # 5. 部品実装 (.tsx + .stories.tsx 生成)
+    "assemble",   # 6. ページ統合 (page.tsx + SEO)
+    "baseline",   # 7. VRT 基準作成 (pixel-perfect 基準スクショ)
 ]
 
 # --- 外部 URL ---
