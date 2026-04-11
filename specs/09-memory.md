@@ -48,6 +48,10 @@ Claude Code は以下を「保護パス」として扱い、`bypassPermissions` 
 
 設定による Override は存在しない。`--dangerously-skip-permissions` フラグでも保護パスは例外のままである。
 
+### Hook による事前ブロック
+
+erqo-next は `core/write_guard.py` を `PreToolUse` Hook（matcher: `Write|Edit|NotebookEdit`）に登録し、保護パスへの書き込みを **Claude Code の確認プロンプトが出る前に** ブロックする。AI が間違えて保護パスに書き込もうとしても `exit 2` でツール実行が止まり、日本語のエラーメッセージが返る。設定の出どころは `core/constants.py` の `PROTECTED_PATH_PREFIXES` と `PROTECTED_PATH_EXCEPTIONS` で一元管理している。
+
 ### 一時ファイル・ランタイムデータの配置ルール
 
 新しい一時ファイル・ランタイムデータの置き場所を決めるときは:
@@ -56,4 +60,4 @@ Claude Code は以下を「保護パス」として扱い、`bypassPermissions` 
 2. プロジェクトルート直下のドット始まりファイル（例: `.commit_msg_tmp.txt`）、または保護パス外の新規ディレクトリに置く
 3. 既存の `.claude/state/` はプロジェクトルート直下 `state/` への移行が検討されている
 
-`.git/` や `.claude/` 配下への書き込みを見つけたら、配置先を上記ルールに従って変更する。
+`.git/` や `.claude/` 配下への書き込みを見つけたら、配置先を上記ルールに従って変更する。`write_guard.py` が事前ブロックするが、ルール自体を AI が知っていないと誤った設計判断を生むため、このルール本文も合わせて維持する。

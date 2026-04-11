@@ -137,37 +137,26 @@ python "{nxt}/core/index.py" reindex
 確認プロンプトが出る。よって一時ファイルはこのどちらにも入れず、プロジェクト
 ルート直下のドット始まりファイルに置く。
 
-#### 5-4. ステージング（明示的にファイル指定）
+#### 5-4. 自動ステージング
 
 ```bash
-git add -- <ファイル1> <ファイル2> ...
+python "{nxt}/core/stage_ops.py" stage
 ```
 
-`git_ops.py commit` は使わない理由: `--files` 引数が認識されないと内部で `git add -A` にフォールバックする罠がある。**`git` を直接呼ぶ**。
+`stage_ops.py` が `git status` の変更ファイルから `STAGE_BLACKLIST_PREFIXES`
+（`.claude/state/`, `.claude/settings.local.json`, `.commit_msg_tmp.txt` 等）を
+機械的に除外して `git add` する。AI が手動でファイル指定することは**禁止**
+（`specs/08-responsibility.md` の曖昧判断禁止に基づく）。
 
-#### 5-5. ステージング検証（必須・スキップ禁止）
+事前確認したい場合は `python "{nxt}/core/stage_ops.py" collect` で dry-run できる。
 
-```bash
-git status --short
-```
-
-出力を **必ず提案時のリストと突き合わせる**。
-想定外のファイルが混じっていたら以下で除外する:
-
-```bash
-git restore --staged <想定外のファイル>
-```
-
-除外後にもう一度 `git status --short` で確認する。
-**想定通りになるまでコミットしない。**
-
-#### 5-6. コミット
+#### 5-5. コミット
 
 ```bash
 git commit -F .commit_msg_tmp.txt
 ```
 
-#### 5-7. 一時ファイル削除
+#### 5-6. 一時ファイル削除
 
 ```bash
 rm .commit_msg_tmp.txt
@@ -194,8 +183,7 @@ rm .commit_msg_tmp.txt
 1. **承認は 1 回だけ** — ログとコミットを別々に確認させない。両方まとめて提示する
 2. **ログ → コミットの順序厳守** — ログをコミットに含めるためログを先に保存する
 3. **heredoc 禁止** — コミットメッセージは必ず `Write` ツールで `.commit_msg_tmp.txt` に書き、`git commit -F` で渡す
-4. **`git_ops.py commit` は使わない** — `git add` は `git` を直接呼ぶ。git_ops の commit にはフォールバックの罠がある
-5. **ステージング検証は必須** — `git status --short` で必ず確認し、想定外があれば `git restore --staged` で除外
-6. **push は別途承認** — `/wrap` は push しない
-7. **170 行目安** — セッションログは 1 ファイル 170 行前後を目安とする
-8. **失敗時は中断** — 途中のステップが失敗したら処理を止めてユーザーに報告する
+4. **ステージングは `stage_ops.py stage` 一択** — AI が `git add` に手動でファイルを指定するのは禁止。除外対象は `STAGE_BLACKLIST_PREFIXES` で機械的に管理する
+5. **push は別途承認** — `/wrap` は push しない
+6. **170 行目安** — セッションログは 1 ファイル 170 行前後を目安とする
+7. **失敗時は中断** — 途中のステップが失敗したら処理を止めてユーザーに報告する

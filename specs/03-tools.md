@@ -14,6 +14,8 @@
 │   ├── install.py     ← プロジェクト用セットアップ
 │   ├── dev.py         ← 本体リポジトリ用セットアップ（IS_SOURCE 限定）
 │   ├── git_ops.py     ← git 操作ヘルパー（/wrap, /codi, /aud 共通）
+│   ├── stage_ops.py   ← 自動ステージング（/wrap 用、ブラックリスト機械適用）
+│   ├── write_guard.py ← PreToolUse Hook 用、保護パス書き込みを事前ブロック
 │   ├── session.py
 │   ├── state.py
 │   ├── load.py
@@ -102,7 +104,27 @@
 | `python core/git_ops.py check` | 差分確認 |
 | `python core/git_ops.py commit "msg"` | git add -A → commit |
 
-push や指定ファイルコミットが必要な時は `git` を直接呼ぶ（`/wrap` がそうしている）。
+push が必要な時は `git` を直接呼ぶ（`/wrap` がそうしている）。
+
+### stage_ops.py — 自動ステージング
+
+`/wrap` のステージングを機械化するスクリプト。`git status --short` で得た変更ファイルから `STAGE_BLACKLIST_PREFIXES`（`constants.py`）に該当するものを除外して `git add` する。AI が手動でファイル指定することを禁止し、`specs/08-responsibility.md` の「曖昧判断禁止」を実装する。
+
+| コマンド | 内容 |
+|---|---|
+| `python core/stage_ops.py collect` | 対象を表示（dry-run、git add しない） |
+| `python core/stage_ops.py stage` | 対象を実際に git add |
+
+### write_guard.py — 保護パス書き込みガード
+
+`PreToolUse` Hook から呼ばれる事前検証スクリプト。`Write` / `Edit` / `NotebookEdit` の実行直前に stdin で渡される JSON から `tool_input.file_path` を抽出し、`PROTECTED_PATH_PREFIXES`（`.git/`, `.claude/`、ただし `PROTECTED_PATH_EXCEPTIONS` の `commands/agents/skills/worktrees` は除外）に該当する場合は `exit 2` でブロックする。Claude Code の保護パス確認プロンプトが発生する前に AI 作業を止めて事故を防ぐ。
+
+`CLAUDE_PROJECT_DIR` が無い・JSON が不正・プロジェクト外パス・例外発生などは全て fail-open（`exit 0`）で素通しする。
+
+| 動作 | 終了コード |
+|---|---|
+| 保護パスへの書き込み検出 | `2` （ツール実行ブロック + stderr に日本語メッセージ） |
+| 保護パス外 / 取得不能 / 例外 | `0` （素通し） |
 
 ### session.py — セッション管理
 
@@ -159,6 +181,8 @@ state.py ← /codi (全ステップ)
 load.py ← /codi ステップ1
 record.py ← /codi ステップ4
 git_ops.py ← /codi ステップ5, /wrap, /aud
+stage_ops.py ← /wrap ステップ 5-4
+write_guard.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
 install.py ← dev.py（ヘルパー再利用）
 fb/handler.py ← /fb
 ```

@@ -58,6 +58,37 @@ DEFAULT_GITIGNORE_LINES = [
     ".next/",
 ]
 
+# --- 自動ステージング時のブラックリスト ---
+# stage_ops.py がコミット候補から機械的に除外するパス。
+# .gitignore に書いてあれば git status から消えるが、追跡済みファイルや
+# 設計上 .gitignore に入れない一時ファイルを念のため二重で弾く。
+# プロジェクトルートからの相対パス前方一致でマッチさせる。
+
+STAGE_BLACKLIST_PREFIXES = (
+    ".claude/state/",
+    ".claude/settings.local.json",
+    ".commit_msg_tmp.txt",
+)
+
+# --- Claude Code 保護パス ---
+# Claude Code は以下を「保護パス」として扱い、bypassPermissions モードでも
+# 書き込み時に確認プロンプトを出す。設定による無効化は存在しない。
+# write_guard.py が PreToolUse Hook 経由で事前ブロックするための定数。
+# 例外サブディレクトリ (commands/agents/skills/worktrees) は書き込み許可される。
+# プロジェクトルートからの相対パス前方一致でマッチさせる。
+
+PROTECTED_PATH_PREFIXES = (
+    ".git/",
+    ".claude/",
+)
+
+PROTECTED_PATH_EXCEPTIONS = (
+    ".claude/commands/",
+    ".claude/agents/",
+    ".claude/skills/",
+    ".claude/worktrees/",
+)
+
 # --- 共通 permission 設定（本元・プロジェクト両方に適用） ---
 
 PERMISSION_DEFAULTS_ALLOW = ["Bash", "Edit", "Write", "Read"]

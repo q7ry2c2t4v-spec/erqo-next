@@ -99,7 +99,17 @@ def _hook_config(nxt_path: str) -> dict:
                     "statusMessage": "コンテキストを復元中...",
                 }],
             },
-        ]
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "Write|Edit|NotebookEdit",
+                "hooks": [{
+                    "type": "command",
+                    "command": f'python "$CLAUDE_PROJECT_DIR/{nxt_path}/core/write_guard.py"',
+                    "timeout": 5,
+                }],
+            },
+        ],
     }
 
 
@@ -140,7 +150,12 @@ def setup_claude_md(project_root: Path) -> bool:
 
 
 def setup_hooks(project_root: Path) -> bool:
-    """settings.json に SessionStart Hook を設定する。既存の Hook はマージ。"""
+    """settings.json に Hook を設定する。既存の Hook はマージ。
+
+    _hook_config() が返す全 hook_type (SessionStart / PreToolUse 等) を
+    走査し、matcher が未登録のエントリだけを追加する。プロジェクト固有や
+    手動で書かれた Hook は触らずに保持する。
+    """
     nxt_path = _nxt_relpath(project_root)
     hook_config = _hook_config(nxt_path)
 
@@ -156,25 +171,23 @@ def setup_hooks(project_root: Path) -> bool:
         settings = {}
 
     hooks = settings.setdefault("hooks", {})
-    existing_matchers = set()
-    if "SessionStart" in hooks:
-        for entry in hooks["SessionStart"]:
-            existing_matchers.add(entry.get("matcher", ""))
-    else:
-        hooks["SessionStart"] = []
 
-    added = False
-    for hook_entry in hook_config["SessionStart"]:
-        if hook_entry["matcher"] not in existing_matchers:
-            hooks["SessionStart"].append(hook_entry)
-            added = True
+    added_total = 0
+    for hook_type, hook_entries in hook_config.items():
+        existing_entries = hooks.setdefault(hook_type, [])
+        existing_matchers = {entry.get("matcher", "") for entry in existing_entries}
+        for hook_entry in hook_entries:
+            if hook_entry["matcher"] not in existing_matchers:
+                existing_entries.append(hook_entry)
+                added_total += 1
 
     settings_path.write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(f"  {SETTINGS_FILENAME}: Hook {'追加' if added else '設定済み (変更なし)'}")
-    return added
+    label = f"{added_total} 個追加" if added_total else "設定済み (変更なし)"
+    print(f"  {SETTINGS_FILENAME}: Hook {label}")
+    return added_total > 0
 
 
 def setup_permission_defaults(project_root: Path) -> bool:
@@ -408,18 +421,20 @@ def verify_installation(project_root: Path) -> bool:
         print(f"  {'OK' if ok else 'NG'} {f}")
         all_ok = all_ok and ok
 
-    # settings.json + SessionStart Hook
+    # settings.json + Hook 群
     settings_path = _settings_path(project_root)
+    settings_hooks: dict = {}
     if settings_path.exists():
         try:
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
-            has_hook = "SessionStart" in settings.get("hooks", {})
+            settings_hooks = settings.get("hooks", {}) or {}
         except (json.JSONDecodeError, OSError):
-            has_hook = False
-    else:
-        has_hook = False
-    print(f"  {'OK' if has_hook else 'NG'} {SETTINGS_FILENAME} (SessionStart Hook)")
-    all_ok = all_ok and has_hook
+            settings_hooks = {}
+    has_session_hook = "SessionStart" in settings_hooks
+    has_pretool_hook = "PreToolUse" in settings_hooks
+    print(f"  {'OK' if has_session_hook else 'NG'} {SETTINGS_FILENAME} (SessionStart Hook)")
+    print(f"  {'OK' if has_pretool_hook else 'NG'} {SETTINGS_FILENAME} (PreToolUse Hook)")
+    all_ok = all_ok and has_session_hook and has_pretool_hook
 
     # スキル
     skills_dir = _project_skills_dir(project_root)
