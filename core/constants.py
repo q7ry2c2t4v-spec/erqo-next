@@ -232,6 +232,16 @@ RECON_NODE_SCRIPT_FILENAME = "recon.mjs"
 
 RECON_TEXT_ONLY_MARKER_FILENAME = "text-only.json"
 
+# --- baseline: VRT 基準スクショ自動取得 ---
+# cmd_baseline が baseline.mjs を呼び出し、Storybook ストーリーの基準スクショを撮影する。
+# Storybook が起動していなければ自動起動 → 撮影 → 停止する。
+
+BASELINE_NODE_SCRIPT_FILENAME = "baseline.mjs"
+BASELINE_NODE_TIMEOUT_SEC = 180
+BASELINE_OUTPUT_DIR_NAME = "baseline"
+BASELINE_STORYBOOK_PORT = 6099
+BASELINE_SCREENSHOT_PREFIX = "baseline-"
+
 # --- コーディングルール判定 (coding_rules.py) ---
 # ファイル拡張子からカテゴリを機械判定するための定数。
 # AI の自己判断を排除する (specs/08-responsibility.md)。

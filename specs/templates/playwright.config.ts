@@ -11,7 +11,25 @@ export default defineConfig({
     },
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'vrt',
+      testDir: './tests/vrt',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
+      name: 'vrt-mobile',
+      testDir: './tests/vrt',
+      use: {
+        ...devices['iPhone 14'],
+      },
+    },
   ],
   webServer: {
     command: 'npm run dev',

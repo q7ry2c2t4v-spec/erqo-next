@@ -32,6 +32,8 @@ from constants import (
     STATUS_WIP,
     HISTORY_DIR_NAME,
     INDEX_MD_FILENAME,
+    LAYOUT_ID_PATTERNS,
+    STORYBOOK_SHELF_NAME,
 )
 from page_parser import parse_sections, find_section_dir
 from feedback import init_error_handling
@@ -86,6 +88,20 @@ def _check_project():
 
 def _is_fix_task(task_id: str) -> bool:
     return "-FIX-" in task_id or task_id.endswith("-FIX")
+
+
+def _is_layout_task(task_id: str) -> bool:
+    """タスク ID がレイアウト系かどうかを機械判定する。"""
+    segments = task_id.split("-")
+    return any(seg.upper() in LAYOUT_ID_PATTERNS for seg in segments)
+
+
+def _bookshelf_page_path(task_id: str) -> Path | None:
+    """本棚正本ページのパスを返す (存在チェックなし)。"""
+    if LIBS_DIR is None:
+        return None
+    slug = task_id.lower()
+    return LIBS_DIR / STORYBOOK_SHELF_NAME / slug / f"{slug}.md"
 
 
 def _get_original_id(fix_task_id: str) -> str:
@@ -155,11 +171,23 @@ def create_record(task_id: str) -> None:
     else:
         filepath = section_dir / _get_filename(task_id)
         tp_id = f"TP-{section.upper()}"
+
+        # レイアウトタスク: 本棚ページへの参照を自動付与
+        related = tp_id
+        bookshelf_path = _bookshelf_page_path(task_id)
+        if _is_layout_task(task_id) and bookshelf_path and bookshelf_path.exists():
+            bookshelf_rel = str(
+                bookshelf_path.relative_to(LIBS_DIR.parent)
+            ).replace("\\", "/")
+            related = f"{tp_id}, {bookshelf_rel}"
+
         content = TEMPLATE.format(
-            task_id=task_id, title="タイトル", related=tp_id, tags="タグ",
+            task_id=task_id, title="タイトル", related=related, tags="タグ",
         )
         filepath.write_text(content, encoding="utf-8")
         print(f"record: 新規ページ作成 -> {filepath}")
+        if _is_layout_task(task_id) and bookshelf_path and bookshelf_path.exists():
+            print(f"  デザイン設計書: {bookshelf_path}")
 
 
 def run_merge(task_id: str, changed: list[str], new_file: str) -> None:

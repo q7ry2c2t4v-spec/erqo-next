@@ -121,7 +121,7 @@ python "{nxt}/core/state.py" $ARGUMENTS complete_substep assemble
 
 # 2-3. VRT 基準スクショ (pixel-perfect threshold:0 基準を保存)
 python "{nxt}/core/clone.py" baseline $ARGUMENTS
-# → AI が Storybook + playwright vrt --update-snapshots で基準を更新
+# → baseline.mjs が自動実行: Storybook 起動 → 各ビューポートでスクショ撮影 → 停止
 python "{nxt}/core/state.py" $ARGUMENTS complete_substep baseline
 ```
 

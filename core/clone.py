@@ -48,6 +48,10 @@ from constants import (
     RECON_NODE_SCRIPT_FILENAME,
     RECON_NODE_TIMEOUT_SEC,
     RECON_TEXT_ONLY_MARKER_FILENAME,
+    BASELINE_NODE_SCRIPT_FILENAME,
+    BASELINE_NODE_TIMEOUT_SEC,
+    BASELINE_OUTPUT_DIR_NAME,
+    BASELINE_STORYBOOK_PORT,
 )
 from page_parser import parse_header, parse_sections
 from feedback import init_error_handling
@@ -1223,6 +1227,51 @@ def _build_stories_skeleton(task_id: str) -> str:
     return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
 
 
+def _build_vrt_spec_skeleton(task_id: str) -> str:
+    """VRT テストファイル雛形 (コードフェンス付き)。"""
+    pascal = _task_id_to_pascal(task_id)
+    slug = _task_slug(task_id)
+    code = (
+        "// tests/vrt/SLUG.spec.ts\n"
+        "import { test, expect } from '@playwright/test';\n"
+        "\n"
+        "const STORYBOOK_URL = 'http://localhost:6006';\n"
+        "\n"
+        "test('PASCAL — default', async ({ page }) => {\n"
+        "  await page.goto(\n"
+        "    `${STORYBOOK_URL}/iframe.html?id=layout-SLUG_LOWER--default&viewMode=story`,\n"
+        "  );\n"
+        "  await page.waitForLoadState('networkidle');\n"
+        "  await expect(page).toHaveScreenshot('SLUG-default.png', {\n"
+        "    fullPage: true,\n"
+        "    threshold: 0,\n"
+        "    maxDiffPixels: 0,\n"
+        "    animations: 'disabled',\n"
+        "  });\n"
+        "});\n"
+        "\n"
+        "test('PASCAL — mobile', async ({ page }) => {\n"
+        "  await page.goto(\n"
+        "    `${STORYBOOK_URL}/iframe.html?id=layout-SLUG_LOWER--mobile&viewMode=story`,\n"
+        "  );\n"
+        "  await page.waitForLoadState('networkidle');\n"
+        "  await expect(page).toHaveScreenshot('SLUG-mobile.png', {\n"
+        "    fullPage: true,\n"
+        "    threshold: 0,\n"
+        "    maxDiffPixels: 0,\n"
+        "    animations: 'disabled',\n"
+        "  });\n"
+        "});\n"
+    )
+    return (
+        "```ts\n"
+        + code.replace("SLUG_LOWER", pascal.lower())
+        .replace("SLUG", slug)
+        .replace("PASCAL", pascal)
+        + "```"
+    )
+
+
 def _build_build_section(task_id: str) -> str:
     """ビルド指示セクション (末尾改行なし)。"""
     pascal = _task_id_to_pascal(task_id)
@@ -1232,12 +1281,13 @@ def _build_build_section(task_id: str) -> str:
         f"## {task_id}.ビルド指示 — build 工程指示",
         "",
         "> build が生成。AI はこのセクション + 「要望反映指示」+ 「トークン定義」の 3 つを読んで",
-        "> 下記の `.tsx` / `.stories.tsx` を生成する。",
+        "> 下記の `.tsx` / `.stories.tsx` / VRT テストを生成する。",
         "",
         "### 生成先",
         "",
         f"- コンポーネント: `{target_dir}/{pascal}.tsx`",
         f"- Storybook ストーリー: `{target_dir}/{pascal}.stories.tsx`",
+        f"- VRT テスト: `tests/vrt/{slug}.spec.ts`",
         f"- コンポーネント名: `{pascal}`",
         f"- Storybook タイトル: `Layout/{pascal}`",
         "",
@@ -1248,7 +1298,8 @@ def _build_build_section(task_id: str) -> str:
         "3. 任意値 `bg-[#...]` は禁止。すべて `extracted-*` トークンクラスを使う",
         "4. iOS 対応ルール (safe-area-inset / 44px タップ領域) を遵守",
         "5. `.stories.tsx` で Default + Mobile の 2 story を作成 (VRT 基準に必要)",
-        "6. アニメは `prefers-reduced-motion` で停止できるよう framer motion variants で実装",
+        "6. `tests/vrt/` に VRT テストファイルを作成 (baseline 工程で基準スクショを自動撮影)",
+        "7. アニメは `prefers-reduced-motion` で停止できるよう framer motion variants で実装",
         "",
         "### .tsx 雛形",
         "",
@@ -1257,6 +1308,10 @@ def _build_build_section(task_id: str) -> str:
         "### .stories.tsx 雛形",
         "",
         _build_stories_skeleton(task_id),
+        "",
+        "### VRT テスト雛形",
+        "",
+        _build_vrt_spec_skeleton(task_id),
     ]
     return "\n".join(lines)
 
@@ -1392,49 +1447,99 @@ def _build_baseline_section(task_id: str) -> str:
     lines = [
         f"## {task_id}.基準スクショ指示 — baseline 工程指示",
         "",
-        "> baseline が生成。assemble 完了後の見た目を `pixel-perfect` 基準として保存する。",
+        "> baseline が自動実行。Storybook を起動 → 各ビューポートでスクショ撮影 → 停止する。",
         "",
-        "### 手順",
+        "### 自動撮影の出力先",
         "",
-        "1. Storybook を起動 (`npm run storybook` など)",
-        f"2. `Layout/{pascal}` ストーリーが表示されることを確認",
-        "3. VRT テストを **更新モード** で実行し基準スクショを保存:",
+        f"- `.libs/storybook/{slug}/{BASELINE_OUTPUT_DIR_NAME}/baseline-desktop.png`",
+        f"- `.libs/storybook/{slug}/{BASELINE_OUTPUT_DIR_NAME}/baseline-mobile.png`",
+        "",
+        "### VRT 回帰テスト (変更検出)",
+        "",
+        "基準スクショ撮影後、VRT テストで変更検出ができる:",
         "",
         "```bash",
-        "npx playwright test --project=vrt --update-snapshots",
+        "# Storybook を起動してからテスト実行",
+        "npx playwright test --project=vrt",
+        "npx playwright test --project=vrt-mobile",
         "```",
         "",
-        "4. 生成された `*.png` を `tests/vrt/__screenshots__/` にコミット",
+        f"テストファイル: `tests/vrt/{slug}.spec.ts` (build 工程で生成済み)",
         "",
-        "### VRT しきい値 (pixel-perfect モード)",
-        "",
-        "```ts",
-        "// playwright.config.ts / tests/vrt/*.spec.ts",
-        "expect(page).toHaveScreenshot({",
-        "  threshold: 0,",
-        "  maxDiffPixels: 0,",
-        "  animations: 'disabled',",
-        "});",
-        "```",
-        "",
-        "### 取得ビューポート (元サイト recon と同一)",
+        "### 撮影ビューポート",
         "",
     ]
     for name, (w, h), _scr, _json in RECON_VIEWPORTS:
         lines.append(f"- `{name}` {w}×{h}")
     lines.extend([
         "",
-        "### 注意",
+        "### 撮影条件",
         "",
-        "- `prefers-reduced-motion: reduce` で撮影すること (アニメ停止)",
-        "- 実装を変更したら差分を確認し、意図した変更のみ `--update-snapshots` で更新する",
-        f"- 更新後は git commit (`feat({slug}): VRT 基準更新`)",
+        "- `reducedMotion: 'reduce'` (アニメ停止)",
+        "- `fullPage: true` (ページ全体)",
+        "- `networkidle` 待機後 1.5 秒の安定化待ち",
     ])
     return "\n".join(lines)
 
 
+def _find_baseline_script() -> tuple[Path | None, str]:
+    """core/clone_node/baseline.mjs の実パスを返す。"""
+    script = NXT_ROOT / "core" / RECON_NODE_DIR_NAME / BASELINE_NODE_SCRIPT_FILENAME
+    if not script.exists():
+        return None, f"baseline スクリプトが見つかりません: {script}"
+    return script, ""
+
+
+def _run_node_baseline(
+    node_path: str,
+    script: Path,
+    story_id: str,
+    output_dir: Path,
+    viewports: list[tuple[str, tuple[int, int]]],
+    port: int,
+) -> tuple[bool, str]:
+    """baseline.mjs を起動して Storybook ストーリーの基準スクショを取得する。
+
+    Returns: (success, message)
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [node_path, str(script), story_id, str(output_dir)]
+    for name, (w, h) in viewports:
+        cmd.extend(["--viewport", f"{name}:{w}x{h}"])
+    cmd.extend(["--port", str(port)])
+
+    cwd = PROJECT_ROOT if PROJECT_ROOT is not None else None
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=BASELINE_NODE_TIMEOUT_SEC,
+            cwd=str(cwd) if cwd else None,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"タイムアウト ({BASELINE_NODE_TIMEOUT_SEC} 秒)"
+    except OSError as exc:
+        return False, f"実行エラー: {exc}"
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        stdout = (result.stdout or "").strip()
+        return False, (
+            f"baseline.mjs が失敗しました (exit={result.returncode})\n"
+            f"  stderr: {stderr}\n"
+            f"  stdout: {stdout}"
+        )
+
+    return True, (result.stdout or "").strip()
+
+
 def cmd_baseline(task_id: str) -> None:
-    """サブステップ 2-7 VRT 基準作成 — pixel-perfect 基準スクショ指示を追記する。"""
+    """サブステップ 2-7 VRT 基準作成 — Storybook の基準スクショを自動撮影する。"""
     page_path = _bookshelf_page_path(task_id)
     if page_path is None or not page_path.exists():
         print(
@@ -1449,6 +1554,7 @@ def cmd_baseline(task_id: str) -> None:
         print(f"エラー: 本棚ページ読み込み失敗: {exc}", file=sys.stderr)
         sys.exit(1)
 
+    # 本棚ページに指示セクションを追記 (参照用)
     section = _build_baseline_section(task_id)
     new_page_md = _replace_or_append_section(
         page_md, f"{task_id}.基準スクショ指示", section
@@ -1457,8 +1563,55 @@ def cmd_baseline(task_id: str) -> None:
         new_page_md += "\n"
     page_path.write_text(new_page_md, encoding="utf-8")
 
-    print("clone baseline: 基準スクショ指示を本棚ページに追記しました")
-    print(f"  -> {page_path}")
+    # --- 実際にスクショを撮影 ---
+
+    # Playwright チェック
+    _, pw_code, pw_err = _find_playwright_cli()
+    if pw_code != 0:
+        print(f"エラー: {pw_err}", file=sys.stderr)
+        sys.exit(pw_code)
+
+    # Node チェック
+    node_path, node_err = _find_node_executable()
+    if node_path is None:
+        print(f"エラー: {node_err}", file=sys.stderr)
+        sys.exit(1)
+
+    # baseline.mjs チェック
+    baseline_script, script_err = _find_baseline_script()
+    if baseline_script is None:
+        print(f"エラー: {script_err}", file=sys.stderr)
+        sys.exit(1)
+
+    # Story ID を計算 (Storybook の title: 'Layout/PascalCase' → ID: 'layout-pascalcase--default')
+    pascal = _task_id_to_pascal(task_id)
+    story_id = f"layout-{pascal.lower()}--default"
+
+    output_dir = page_path.parent / BASELINE_OUTPUT_DIR_NAME
+
+    # ビューポートリスト (recon と同じ形式に変換)
+    viewports = [(name, vp) for name, vp, _scr, _json in RECON_VIEWPORTS]
+
+    print(f"clone baseline: VRT 基準スクショを撮影します")
+    print(f"  ストーリー: Layout/{pascal} (id={story_id})")
+    print(f"  出力先: {output_dir}")
+
+    ok, msg = _run_node_baseline(
+        node_path, baseline_script, story_id, output_dir,
+        viewports, BASELINE_STORYBOOK_PORT,
+    )
+
+    if not ok:
+        print(f"エラー: 基準スクショの撮影に失敗しました\n{msg}", file=sys.stderr)
+        sys.exit(1)
+
+    # 結果を表示
+    print()
+    print(msg)
+    print()
+    print("clone baseline: 基準スクショの撮影完了")
+    print(f"  本棚ページ: {page_path}")
+    print(f"  スクショ: {output_dir}")
 
 
 # --- ディスパッチ ---

@@ -26,6 +26,7 @@ from constants import (
     UI_TAG_KEYWORDS,
     LAYOUT_ID_PATTERNS,
     LAYOUT_TAG_KEYWORDS,
+    STORYBOOK_SHELF_NAME,
 )
 from page_parser import parse_tp_row, parse_header, find_section_dir
 from index import collect as index_collect
@@ -238,9 +239,27 @@ def load_task(task_id: str) -> str:
 
     if task_type == "layout":
         merged_keywords = list(set(layout_result["docs_keywords"] + ui_result["docs_keywords"]))
+        slug = task_id.lower()
+        bookshelf_path = LIBS_DIR / STORYBOOK_SHELF_NAME / slug / f"{slug}.md"
+
+        if not bookshelf_path.exists():
+            return (
+                f"エラー: レイアウトタスク {task_id} の本棚ページが見つかりません。\n"
+                f"先に `/layo {task_id}` でデザインを策定してください。\n"
+                f"期待パス: {bookshelf_path}"
+            )
+
+        try:
+            bookshelf_content = bookshelf_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            return f"エラー: 本棚ページの読み込みに失敗しました: {exc}"
+
         parts.append(
             f"## レイアウト判定: レイアウトタスク (キーワード: {', '.join(merged_keywords)})\n\n"
-            "デザインリファレンスは /layo で収集済み。/codi では本棚ページを参照して実装する。"
+            f"本棚ページ: `{bookshelf_path}`"
+        )
+        parts.append(
+            f"## 本棚ページ (デザイン設計書 — /layo で策定済み)\n\n{bookshelf_content}"
         )
     elif task_type == "ui":
         parts.append(

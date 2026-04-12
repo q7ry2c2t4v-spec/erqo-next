@@ -52,6 +52,8 @@ STANDARD_DIRS = [
     f"{CLAUDE_DIR_NAME}/{STATE_DIR_NAME}",
     SCRIPTS_DIR_NAME,
     UI_SPECS_DIR_NAME,
+    "e2e",
+    "tests/vrt",
 ]
 
 
