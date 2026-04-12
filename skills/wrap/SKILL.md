@@ -1,5 +1,6 @@
 ---
 name: wrap
+target: both
 description: /wrap - セッション終了の統合スキル。セッションログ作成 + git コミットを 1 コマンドにまとめ、承認も 1 回で完結させる。旧 /mmy + /gh の統合版。
 effort: max
 ---

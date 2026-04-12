@@ -1,3 +1,9 @@
+---
+name: fb
+target: project
+description: /fb — erqo-next 本体への改善提案・エラー報告・その他のフィードバック送信 (プル子からのみ使用)
+---
+
 # /fb — フィードバック送信スキル
 
 ## 概要

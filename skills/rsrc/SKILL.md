@@ -1,5 +1,6 @@
 ---
 name: rsrc
+target: both
 description: "/rsrc TOPIC" - 任意のトピックについてウェブリサーチを行い、.libs/research/ にリサーチページとして保存する。index.py collect 経由で /tp から自動参照される。
 argument-hint: TOPIC（例: OAuth2.0認証, WebSocket通信, メール規格）
 effort: max

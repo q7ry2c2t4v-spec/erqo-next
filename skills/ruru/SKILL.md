@@ -1,5 +1,6 @@
 ---
 name: ruru
+target: project
 description: /ruru - プロジェクトルールの登録・更新。ユーザーとの対話でルール内容を決め、.libs/rules/ に保存し、CLAUDE.md に @import を追加する。
 effort: max
 ---

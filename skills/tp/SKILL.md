@@ -1,5 +1,6 @@
 ---
 name: tp
+target: project
 description: "/tp SECTION" - セクション単位の詳細設計とタスク分解。既存の TP ページがあれば差分チェック付きで更新する。新規・更新どちらにも対応。
 argument-hint: SECTION（例: AUTH, API, DB）
 effort: max

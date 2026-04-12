@@ -6,17 +6,22 @@
 
 ```
 core/          ← コアモジュール（全スクリプトの土台）
-├── constants.py   ← 固定値の一元管理
-├── paths.py       ← パス定数（constants 由来）
+├── constants.py           ← 固定値の一元管理
+├── paths.py               ← パス定数（constants 由来）
 ├── feedback.py
 ├── page_parser.py
 ├── index.py
 ├── docs.py
-├── install.py     ← プロジェクト用セットアップ
-├── dev.py         ← 本体リポジトリ用セットアップ（IS_SOURCE 限定）
-├── git_ops.py     ← git 操作ヘルパー（/wrap, /codi, /aud 共通）
-├── stage_ops.py   ← 自動ステージング（/wrap 用、ブラックリスト機械適用）
-├── write_guard.py ← PreToolUse Hook 用、保護パス書き込みを事前ブロック
+├── install.py             ← プロジェクト用セットアップ
+├── dev.py                 ← 本体リポジトリ用セットアップ（IS_SOURCE 限定）
+├── git_ops.py             ← git 操作ヘルパー（/wrap, /codi, /aud 共通）
+├── stage_ops.py           ← 自動ステージング（/wrap 用、ブラックリスト機械適用）
+├── write_guard.py         ← PreToolUse Hook 用、保護パス書き込みを事前ブロック
+├── coding_rules.py        ← コーディング規約の機械判定（編集前に必ず呼ぶ）
+├── coding_rules_hook.py   ← PreToolUse Hook 用、編集前に適用ルールを stderr 通知
+├── clone.py               ← /codi レイアウトタスク用 7 サブステップ実行
+├── clone_node/            ← Node + Playwright サブプロジェクト（隔離）
+│   └── recon.mjs          ←   参考サイト取材（スクショ + DOM/CSS 取得）
 ├── session.py
 ├── state.py
 ├── load.py
@@ -129,6 +134,51 @@ push が必要な時は `git` を直接呼ぶ（`/wrap` がそうしている）
 | 保護パスへの書き込み検出 | `2` （ツール実行ブロック + stderr に日本語メッセージ） |
 | 保護パス外 / 取得不能 / 例外 | `0` （素通し） |
 
+### coding_rules.py — コーディング規約の機械判定
+
+AI がコード編集前に必ず呼ぶスクリプト。ファイルパスから適用すべきルールファイル一覧（L1 ハブ + 該当する L2 / L3）を機械的に判定する。AI の自己判断は一切挟まない（`specs/08-responsibility.md`）。
+
+判定ロジック:
+
+- 常時: `specs/06-coding-rules.md`（L1 汎用共通ハブ）
+- `.py`: + `specs/coding/l2-python.md`
+- `.ts` / `.tsx` / `.mts` / `.cts`: + `specs/coding/l2-typescript.md`
+  - プロジェクトルートに `next.config.ts|mjs|js` があれば: + `specs/coding/l3-nextjs.md`
+  - プロジェクトルートに `wrangler.jsonc|json|toml` があるか、対象ファイルパスに `workers/` が含まれていれば: + `specs/coding/l3-cloudflare.md`
+
+| コマンド | 内容 |
+|---|---|
+| `python core/coding_rules.py <file_path>` | 該当ルールファイル一覧を stdout に出力（1 行 1 ファイル） |
+
+終了コード: 正常 `0` / 引数不正 `2` / ファイル未発見 `3`。詳細は `specs/06-coding-rules.md` §0 適用マトリックス。
+
+### coding_rules_hook.py — 編集前ルール通知 Hook
+
+`PreToolUse` Hook（matcher: `Write|Edit|NotebookEdit`）から呼ばれ、`coding_rules.get_applicable_rules()` を使って対象ファイルに適用されるルール一覧を **stderr に通知するだけ**。ブロックはしない（情報提供のみ、`exit 0`）。
+
+- L1 のみ（コードでない `.md` 等）の場合は黙って終了
+- L2 / L3 が含まれるとき（＝コードファイル）だけ stderr に「## 適用コーディングルール」ヘッダ + ファイル一覧を出力
+- `file_path` 取得不能・JSON 不正・例外発生は fail-open（`exit 0`）
+- 順序は同 matcher 内で `write_guard.py`（ブロック）→ `coding_rules_hook.py`（情報提供）
+
+### clone.py — レイアウトサブパイプライン
+
+`/codi` ステップ2 がレイアウトタスク（`LAYOUT-*` / `PAGE-*` / `CLONE-*` / `DESIGN-*`）の場合に呼ばれる 7 サブステップ実行スクリプト。本元リポジトリでは `/codi` 自体が使えないため、`clone.py` 単体での起動にも対応する（`IS_SOURCE` ガードなし）。
+
+| サブコマンド | 内容 |
+|---|---|
+| `python core/clone.py recon TASK-ID` | 取材（Node + Playwright で参考サイトからスクショ + 6 項目取材） |
+| `python core/clone.py dump TASK-ID` | 本棚化（`.libs/storybook/<slug>/<slug>.md` に下書き生成） |
+| `python core/clone.py apply TASK-ID` | 要望適用（元サイト < 要望） |
+| `python core/clone.py rules TASK-ID` | ルール適用（Tailwind v4 `@theme` トークン + iOS / ハードコ禁止） |
+| `python core/clone.py build TASK-ID` | 部品実装指示（`.tsx` + `.stories.tsx` 雛形） |
+| `python core/clone.py assemble TASK-ID` | ページ統合指示（`page.tsx` + Metadata + JSON-LD） |
+| `python core/clone.py baseline TASK-ID` | VRT 基準スクショ（pixel-perfect `threshold:0`） |
+
+各サブステップは `.libs/storybook/<slug>/<slug>.md` を正本にセクション単位で冪等置換する。`.tsx` / `page.tsx` の直接編集は禁止（修正は必ず `input.md` → `recon` / `apply` 経由）。
+
+取材には `core/clone_node/recon.mjs`（Node + Playwright）が使われる。`clone.py` 本体は Python 標準ライブラリのみで書かれており、Node 依存は `clone_node/` サブディレクトリに隔離されている（`specs/coding/l2-python.md` §1 の本元ルール）。
+
 ### session.py — セッション管理
 
 SessionStart Hook から呼ばれる。
@@ -171,6 +221,18 @@ SessionStart Hook から呼ばれる。
 |---|---|
 | `python skills/fb/handler.py <kind> <summary> [detail]` | フィードバック送信 |
 
+## テンプレート (specs/templates/)
+
+プロジェクト初期化時に `core/install.py` の `setup_qa_configs()` が配布する QA 設定テンプレート群。配置先は `core/paths.py` の `TEMPLATES_DIR = NXT_ROOT / "specs" / "templates"` で定義される。既存ファイルは上書きしない。
+
+| ファイル | 用途 |
+|---|---|
+| `eslint.config.mjs` | ESLint Flat Config（`specs/coding/l3-nextjs.md` §5 準拠） |
+| `playwright.config.ts` | Playwright の `webServer` + `reuseExistingServer` パターン |
+| `lighthouserc.js` | Lighthouse CI 設定 |
+
+追加・変更するときは `core/constants.py` の `QA_CONFIG_TEMPLATES` 一覧と合わせて更新する（リテラル集約、L1 §1.1 ハードコ禁止）。コピー先の各プロジェクトは手動で追従する必要がある点に注意。
+
 ## 依存関係
 
 ```
@@ -186,6 +248,9 @@ record.py ← /codi ステップ4
 git_ops.py ← /codi ステップ5, /wrap, /aud
 stage_ops.py ← /wrap ステップ 5-4
 write_guard.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
-install.py ← dev.py（ヘルパー再利用）
+coding_rules.py ← 01-workflow.md 本元フロー / skills/codi/SKILL.md ステップ2 / coding_rules_hook.py
+coding_rules_hook.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
+clone.py ← /codi ステップ2-B (レイアウトタスク) → clone_node/recon.mjs
+install.py ← dev.py（ヘルパー再利用） / specs/templates/ から QA 設定を配布
 fb/handler.py ← /fb
 ```

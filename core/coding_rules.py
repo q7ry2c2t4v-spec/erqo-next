@@ -71,37 +71,70 @@ def _has_any_marker(project_root: Path, markers: tuple[str, ...]) -> bool:
     return any((project_root / name).exists() for name in markers)
 
 
-def _is_in_workers_dir(file_path: Path, project_root: Path) -> bool:
-    """対象ファイルのパスに WORKERS_DIR_NAME が含まれているか。"""
+def _is_in_path_keyword(file_path: Path, project_root: Path, keyword: str) -> bool:
+    """対象ファイルの相対パスに `keyword` がディレクトリ部として含まれているか。"""
     try:
         rel = file_path.relative_to(project_root)
     except ValueError:
         return False
-    return WORKERS_DIR_NAME in rel.parts
+    return keyword in rel.parts
+
+
+# --- L2 / L3 ルール判定テーブル ---
+# 新言語を追加するときはこのリストに 1 辞書を足すだけで追従する (拡張容易性)。
+# L1 §1.1 ハードコ禁止・§1.2 DRY に準拠し、if/elif 分岐はここには書かない。
+
+_L2_RULES: list[dict] = [
+    {
+        "extensions": PYTHON_FILE_EXTENSIONS,
+        "path": CODING_L2_PYTHON_FILE,
+        "label": _LABEL_PYTHON,
+        "l3": (),
+    },
+    {
+        "extensions": TYPESCRIPT_FILE_EXTENSIONS,
+        "path": CODING_L2_TYPESCRIPT_FILE,
+        "label": _LABEL_TYPESCRIPT,
+        "l3": (
+            {
+                "path": CODING_L3_NEXTJS_FILE,
+                "label": _LABEL_NEXTJS,
+                "markers": NEXTJS_MARKER_FILES,
+                "path_keywords": (),
+            },
+            {
+                "path": CODING_L3_CLOUDFLARE_FILE,
+                "label": _LABEL_CLOUDFLARE,
+                "markers": CLOUDFLARE_MARKER_FILES,
+                "path_keywords": (WORKERS_DIR_NAME,),
+            },
+        ),
+    },
+]
 
 
 def get_applicable_rules(file_path: Path, project_root: Path) -> list[tuple[Path, str]]:
     """ファイルパスから適用ルールを (Path, ラベル) のリストで返す。
 
     L1 ハブは必ず先頭に入る。該当しない拡張子の場合は L1 のみ。
+    新言語を追加するときは `_L2_RULES` に 1 辞書を足すだけで追従する。
     """
     rules: list[tuple[Path, str]] = [(CODING_HUB_FILE, _LABEL_HUB)]
     suffix = file_path.suffix
 
-    if suffix in PYTHON_FILE_EXTENSIONS:
-        rules.append((CODING_L2_PYTHON_FILE, _LABEL_PYTHON))
-
-    if suffix in TYPESCRIPT_FILE_EXTENSIONS:
-        rules.append((CODING_L2_TYPESCRIPT_FILE, _LABEL_TYPESCRIPT))
-
-        if _has_any_marker(project_root, NEXTJS_MARKER_FILES):
-            rules.append((CODING_L3_NEXTJS_FILE, _LABEL_NEXTJS))
-
-        if (
-            _has_any_marker(project_root, CLOUDFLARE_MARKER_FILES)
-            or _is_in_workers_dir(file_path, project_root)
-        ):
-            rules.append((CODING_L3_CLOUDFLARE_FILE, _LABEL_CLOUDFLARE))
+    for l2 in _L2_RULES:
+        if suffix not in l2["extensions"]:
+            continue
+        rules.append((l2["path"], l2["label"]))
+        for l3 in l2["l3"]:
+            marker_hit = _has_any_marker(project_root, l3["markers"])
+            path_hit = any(
+                _is_in_path_keyword(file_path, project_root, kw)
+                for kw in l3["path_keywords"]
+            )
+            if marker_hit or path_hit:
+                rules.append((l3["path"], l3["label"]))
+        break  # 拡張子は 1 グループにしかマッチしない前提
 
     return rules
 

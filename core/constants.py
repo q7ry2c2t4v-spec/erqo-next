@@ -52,17 +52,44 @@ CODING_L2_TYPESCRIPT_FILENAME = "l2-typescript.md"
 CODING_L3_NEXTJS_FILENAME = "l3-nextjs.md"
 CODING_L3_CLOUDFLARE_FILENAME = "l3-cloudflare.md"
 
+# --- OS specs ファイル一覧 ---
+# 本元 CLAUDE.md (手動維持) と プロジェクト CLAUDE.md (install.py が生成) の
+# 両方が @import する specs/ 直下の Markdown 一覧。
+# specs の追加・削除はこの一覧を更新するだけでプロジェクト側は自動追従する
+# (本元 CLAUDE.md は手動で揃える)。この定数が唯一の正本。
+
+OS_SPECS_FILES = (
+    "00-identity.md",
+    "01-workflow.md",
+    "02-skills.md",
+    "03-tools.md",
+    "04-project-guide.md",
+    "05-session.md",
+    "06-coding-rules.md",
+    "07-scopes.md",
+    "08-responsibility.md",
+    "09-memory.md",
+    "10-proposal.md",
+)
+
+# 既存 CLAUDE.md を同期するときに目印にする見出し
+# (install.py:_sync_os_imports_in_claude_md が使う)
+OS_SECTION_HEADING = "## erqo-next OS"
+
+# PROJECT-SERVERS 照合 Hook (project_servers_hook.py) が参照するページのパス
+# (プロジェクトルート相対、specs/07-scopes.md 外部サーバー操作のプロジェクト境界)
+PROJECT_SERVERS_PAGE_REL = ".libs/design/project-spec/servers.md"
+
 # --- ファイル名パターン ---
 
 TP_FILE_PATTERN = "tp-*.md"
 SESSION_LOG_PATTERN = "slog-*.md"
 STATE_FILE_PREFIX = "codi_"
 
-# --- 本元（IS_SOURCE）でのみ除外するスキル ---
-# プロジェクト側には引き続き全スキルが配信される。
-# 本元では使う場面がないスキルをここに列挙し、_scan_skills() がフィルタする。
-
-SOURCE_EXCLUDED_SKILLS = frozenset({"dsgn", "tp", "codi"})
+# --- 本元 (エル子) でのスキル除外は SKILL.md フロントマター `target: project` で宣言する ---
+# かつては SOURCE_EXCLUDED_SKILLS 定数でハードコしていたが、`skills/<name>/SKILL.md`
+# の frontmatter が唯一の正本になった。install.py:_scan_skills() が各 SKILL.md を
+# 読んで target を解釈する。ここに定数は置かない (追従忘れ防止)。
 
 # --- インストール時の生成物 ---
 

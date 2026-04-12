@@ -1,5 +1,6 @@
 ---
 name: codi
+target: project
 description: "/codi ID-CODE" - 識別コード指定でタスクを5ステップパイプラインで実行する。準備→実装→検証→記録→コミット。
 argument-hint: ID-CODE（例: AUTH-SESSION-FLOW）
 effort: max

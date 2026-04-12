@@ -1,5 +1,6 @@
 ---
 name: ret
+target: both
 description: /ret - 直近のセッションログから前回のコンテキストを取得する。ファーストターンでキーワードが識別できない場合に使用する。
 effort: max
 ---

@@ -22,6 +22,7 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
 
 from paths import (
     PROJECT_ROOT,
+    NXT_ROOT,
     IS_SOURCE,
     STATE_DIR,
     DESIGN_DIR,
@@ -38,6 +39,8 @@ from constants import (
     VERSION_CHECK_INTERVAL_SEC,
     MAX_CONTEXT_LENGTH,
     SESSION_LOG_PREVIEW_LINES,
+    SPECS_DIR_NAME,
+    OS_SPECS_FILES,
 )
 from index import reindex
 from page_parser import parse_sections, parse_tp_row
@@ -136,6 +139,38 @@ def check_version() -> str | None:
             f"\n新しいバージョン ({remote_version}) が利用可能です (現在: {local_version})"
         )
     return None
+
+
+def check_local_specs_sync() -> str | None:
+    """ローカルの `.nxt-core/specs/` が OS_SPECS_FILES と整合しているかチェック (プル子専用).
+
+    本元 (エル子) 側は常に最新なのでスキップ。プル子側で specs ファイルが
+    欠落している場合 (本元に追加された新しい specs がまだ giget で配布されていない)、
+    `install.py --update` 実行を促す通知文を返す。
+    """
+    if IS_SOURCE:
+        return None
+
+    specs_dir = NXT_ROOT / SPECS_DIR_NAME
+    if not specs_dir.exists():
+        return None
+
+    missing = [name for name in OS_SPECS_FILES if not (specs_dir / name).exists()]
+    if not missing:
+        return None
+
+    lines = [
+        "",
+        "## OS 追従の注意",
+        "以下の specs ファイルが `.nxt-core/specs/` に見つかりません"
+        " (エル子側に追加されたが、まだ配布されていません):",
+    ]
+    lines.extend(f"- {name}" for name in missing)
+    lines.append("")
+    lines.append(
+        "`python .nxt-core/core/install.py --update` を実行して最新化してください。"
+    )
+    return "\n".join(lines)
 
 
 def check_git_sync() -> str | None:
@@ -242,23 +277,42 @@ def build_orientation_gate() -> str:
     """視点宣言ゲート: セッション開始時に必ず視点とスコープを宣言させる。
 
     specs/07-scopes.md の 3 スコープ判断を毎セッション冒頭で能動的に照合させ、
-    本元 / プロジェクトの取り違えによる致命的な副作用を防ぐ。
+    本元 / プロジェクトの取り違えによる致命的な副作用を防ぐ。さらに本元 = メタ OS
+    / プロジェクト = インスタンスの階層関係 (specs/00-identity.md §わたしの構成)
+    を毎セッション想起させる。
     """
     if IS_SOURCE:
-        repo_label = "本元 OS (IS_SOURCE=True)"
+        repo_label = "本元 OS (IS_SOURCE=True) — **エル子**"
+        stance = (
+            "立場: あなたの呼称は **エル子** (本元リポジトリ `erqo-next` 本体)。"
+            "各プロジェクトに配布される **プル子** を管理する **メタ OS** です。"
+            "本リポジトリでの `specs/` / `core/` / `skills/` の変更は giget 経由で"
+            "各プロジェクトの `.nxt-core/` に配布されます。ここでの変更は"
+            "「全プロジェクトに効く共通変更」として扱うこと。"
+        )
     else:
-        repo_label = "プロジェクト OS (IS_SOURCE=False)"
+        repo_label = "プロジェクト OS (IS_SOURCE=False) — **プル子**"
+        stance = (
+            "立場: あなたの呼称は **プル子** (エル子 = `erqo-next` から giget 配布された"
+            " **プロジェクト OS インスタンス**)。本体の `specs/` / `core/` / `skills/`"
+            " は `.nxt-core/` 配下にあり **読み取り専用** です。システム調整は"
+            "エル子側で行い、giget で取り込むのが原則。プル子が触れるのは"
+            " `.libs/` / `.ui-specs/` / `src/` / `scripts/` / `.claude/` 等の"
+            "プロジェクト固有コンテンツのみ。"
+        )
 
     return (
         "# 視点宣言ゲート (必須)\n"
         f"現在のリポジトリ: {repo_label}\n"
+        f"{stance}\n"
         "\n"
         "最初の応答の冒頭で、以下を必ず記載してから作業に入ること:\n"
         "- 視点: 本元 OS / プロジェクト OS\n"
         "- 依頼のスコープ: 本元 / プロジェクト / 共通\n"
         "- 根拠: (なぜそう判断したか一言)\n"
         "\n"
-        "この宣言が済むまで一切の実作業に進まない。"
+        "この宣言が済むまで一切の実作業に進まない。\n"
+        "参考: specs/00-identity.md §「わたしの構成」 / specs/07-scopes.md"
     )
 
 
@@ -279,6 +333,11 @@ def build_normal_context() -> str:
     version_msg = check_version()
     if version_msg:
         parts.append(version_msg)
+
+    # 3.5. ローカル specs 同期チェック (プル子のみ)
+    specs_sync_msg = check_local_specs_sync()
+    if specs_sync_msg:
+        parts.append(specs_sync_msg)
 
     # 4. git 同期チェック
     sync_msg = check_git_sync()

@@ -32,13 +32,14 @@ if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8
 if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-from paths import IS_SOURCE, PROJECT_ROOT
-from constants import SKILLS_DIR_NAME
+from paths import IS_SOURCE, NXT_ROOT, PROJECT_ROOT
+from constants import CLAUDE_MD_FILENAME, SKILLS_DIR_NAME
 from install import (
     setup_hooks,
     setup_skills,
     setup_os_skills_manifest,
     setup_permission_defaults,
+    sync_os_imports_in_claude_md,
 )
 from feedback import init_error_handling
 
@@ -53,11 +54,45 @@ def _require_source() -> None:
         sys.exit(1)
 
 
+def sync_source_claude_md() -> bool:
+    """本元 CLAUDE.md の `## erqo-next OS` ブロックを OS_SPECS_FILES と同期する。
+
+    install.py の `sync_os_imports_in_claude_md` を再利用する。`nxt_path=""`
+    を渡すことで本元リポジトリルート相対の `@specs/XX.md` 形式で書き出す。
+    見出しが無ければスキップ。既に最新なら書き込みしない (冪等)。
+    """
+    claude_md = NXT_ROOT / CLAUDE_MD_FILENAME
+    if not claude_md.exists():
+        print(f"  {CLAUDE_MD_FILENAME}: 本元ルートに無いためスキップ")
+        return False
+
+    try:
+        existing = claude_md.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        print(f"  {CLAUDE_MD_FILENAME}: 読み込み失敗 (スキップ)")
+        return False
+
+    updated = sync_os_imports_in_claude_md(existing, "")
+    if updated is None:
+        print(f"  {CLAUDE_MD_FILENAME}: `## erqo-next OS` 見出しなしでスキップ")
+        return False
+    if updated == existing:
+        print(f"  {CLAUDE_MD_FILENAME}: 同期済み")
+        return False
+
+    claude_md.write_text(updated, encoding="utf-8")
+    print(f"  {CLAUDE_MD_FILENAME}: 本元 `## erqo-next OS` ブロックを最新化")
+    return True
+
+
 def cmd_setup() -> None:
-    """初回セットアップ: Hook + 共通 permission + スキル + マニフェスト。"""
+    """初回セットアップ: 本元 CLAUDE.md 同期 + Hook + 共通 permission + スキル + マニフェスト。"""
     _require_source()
     print(f"erqo-next 本体セットアップ: {PROJECT_ROOT.name}")
     print()
+
+    # 0. 本元 CLAUDE.md の erqo-next OS ブロックを OS_SPECS_FILES と同期
+    sync_source_claude_md()
 
     # 1. Hook 設定
     setup_hooks(PROJECT_ROOT)

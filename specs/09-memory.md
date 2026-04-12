@@ -58,6 +58,5 @@ erqo-next は `core/write_guard.py` を `PreToolUse` Hook（matcher: `Write|Edit
 
 1. `.git/` と `.claude/`（例外 4 つを除く）は絶対に避ける
 2. プロジェクトルート直下のドット始まりファイル（例: `.commit_msg_tmp.txt`）、または保護パス外の新規ディレクトリに置く
-3. 既存の `.claude/state/` はプロジェクトルート直下 `state/` への移行が検討されている
 
 `.git/` や `.claude/` 配下への書き込みを見つけたら、配置先を上記ルールに従って変更する。`write_guard.py` が事前ブロックするが、ルール自体を AI が知っていないと誤った設計判断を生むため、このルール本文も合わせて維持する。

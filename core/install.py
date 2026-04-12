@@ -30,13 +30,14 @@ from constants import (
     GITIGNORE_FILENAME,
     LIBS_DIR_NAME,
     OS_SKILLS_FILENAME,
+    OS_SPECS_FILES,
+    OS_SECTION_HEADING,
     PERMISSION_DEFAULTS_ALLOW,
     PERMISSION_DEFAULTS_MODE,
     SCRIPTS_DIR_NAME,
     SETTINGS_FILENAME,
     SKILL_MD_FILENAME,
     SKILLS_DIR_NAME,
-    SOURCE_EXCLUDED_SKILLS,
     STATE_DIR_NAME,
     UI_SPECS_DIR_NAME,
 )
@@ -63,16 +64,12 @@ def _nxt_relpath(project_root: Path) -> str:
 
 
 def _claude_md_content(project_name: str, nxt_path: str) -> str:
+    imports = "\n".join(f"@{nxt_path}/specs/{name}" for name in OS_SPECS_FILES)
     return (
         f"# {project_name}\n"
         f"\n"
         f"## erqo-next OS\n"
-        f"@{nxt_path}/specs/00-identity.md\n"
-        f"@{nxt_path}/specs/01-workflow.md\n"
-        f"@{nxt_path}/specs/02-skills.md\n"
-        f"@{nxt_path}/specs/03-tools.md\n"
-        f"@{nxt_path}/specs/04-project-guide.md\n"
-        f"@{nxt_path}/specs/05-session.md\n"
+        f"{imports}\n"
         f"\n"
         f"## プロジェクトルール\n"
     )
@@ -116,6 +113,16 @@ def _hook_config(nxt_path: str) -> dict:
                     },
                 ],
             },
+            {
+                "matcher": "mcp__.*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f'python "$CLAUDE_PROJECT_DIR/{nxt_path}/core/project_servers_hook.py"',
+                        "timeout": 5,
+                    },
+                ],
+            },
         ],
     }
 
@@ -143,16 +150,74 @@ def _os_skills_manifest_path(project_root: Path) -> Path:
 # --- セットアップ関数 ---
 
 
+def sync_os_imports_in_claude_md(existing: str, nxt_path: str) -> str | None:
+    """既存 CLAUDE.md の `## erqo-next OS` ブロックを OS_SPECS_FILES から再生成する。
+
+    見出し `OS_SECTION_HEADING` から次の `## ` 見出し (または EOF) までを、
+    最新の @import 一覧で置き換える。見出しが見つからなければ None を返す。
+    `## プロジェクトルール` など以降のユーザー編集は保持される。
+
+    `nxt_path` はプロジェクトルート相対の `.nxt-core` (プル子側) または
+    空文字 (本元側で `@specs/XX.md` 直指定) のどちらも受け付ける。
+    本元側同期には `dev.py:sync_source_claude_md` から再利用される。
+    """
+    lines = existing.splitlines()
+    heading_idx: int | None = None
+    for i, line in enumerate(lines):
+        if line.strip() == OS_SECTION_HEADING:
+            heading_idx = i
+            break
+    if heading_idx is None:
+        return None
+
+    end_idx = len(lines)
+    for j in range(heading_idx + 1, len(lines)):
+        if lines[j].startswith("## "):
+            end_idx = j
+            break
+
+    prefix = f"{nxt_path}/" if nxt_path else ""
+    new_imports = [f"@{prefix}specs/{name}" for name in OS_SPECS_FILES]
+    new_block = [lines[heading_idx], *new_imports, ""]
+    new_lines = lines[:heading_idx] + new_block + lines[end_idx:]
+    result = "\n".join(new_lines)
+    if existing.endswith("\n") and not result.endswith("\n"):
+        result += "\n"
+    return result
+
+
 def setup_claude_md(project_root: Path) -> bool:
-    """CLAUDE.md を作成する。既存の場合はスキップ。"""
+    """CLAUDE.md を作成または同期する。
+
+    - 新規ファイル: `_claude_md_content()` から全生成
+    - 既存ファイル: `## erqo-next OS` ブロックだけを `OS_SPECS_FILES` と同期し、
+      `## プロジェクトルール` 以降のユーザー手動編集は保持する
+    - `## erqo-next OS` 見出しが無い既存ファイルはスキップ (ユーザー自由記述を尊重)
+    """
     claude_md = project_root / CLAUDE_MD_FILENAME
-    if claude_md.exists():
-        print(f"  {CLAUDE_MD_FILENAME}: 既存 (スキップ)")
-        return False
     nxt_path = _nxt_relpath(project_root)
-    content = _claude_md_content(project_root.name, nxt_path)
-    claude_md.write_text(content, encoding="utf-8")
-    print(f"  {CLAUDE_MD_FILENAME}: 作成")
+
+    if not claude_md.exists():
+        content = _claude_md_content(project_root.name, nxt_path)
+        claude_md.write_text(content, encoding="utf-8")
+        print(f"  {CLAUDE_MD_FILENAME}: 作成")
+        return True
+
+    try:
+        existing = claude_md.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        print(f"  {CLAUDE_MD_FILENAME}: 既存 (読み込み失敗でスキップ)")
+        return False
+
+    updated = sync_os_imports_in_claude_md(existing, nxt_path)
+    if updated is None:
+        print(f"  {CLAUDE_MD_FILENAME}: 既存 ({OS_SECTION_HEADING} 見出しなしでスキップ)")
+        return False
+    if updated == existing:
+        print(f"  {CLAUDE_MD_FILENAME}: 既存 (同期済み)")
+        return False
+    claude_md.write_text(updated, encoding="utf-8")
+    print(f"  {CLAUDE_MD_FILENAME}: {OS_SECTION_HEADING} ブロックを最新化")
     return True
 
 
@@ -253,20 +318,52 @@ def setup_permission_defaults(project_root: Path) -> bool:
     return changed
 
 
+def _read_skill_target(skill_md_path: Path) -> str:
+    """SKILL.md のフロントマター `target:` を読み、`project` / `both` 等を返す。
+
+    frontmatter や `target:` 行が欠落している場合は後方互換で `both` 扱い
+    (エル子・プル子の両方で使える、呼称は specs/00-identity.md 参照)。
+    """
+    try:
+        content = skill_md_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return "both"
+    if not content.startswith("---"):
+        return "both"
+    end = content.find("\n---", 3)
+    if end < 0:
+        return "both"
+    front = content[3:end]
+    for line in front.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("target:"):
+            return stripped.split(":", 1)[1].strip()
+    return "both"
+
+
 def _scan_skills() -> list[str]:
     """NXT_ROOT/skills/ 内のスキルを自動スキャンする。
 
-    本元（IS_SOURCE）では SOURCE_EXCLUDED_SKILLS に列挙されたスキルを除外する。
-    プロジェクト側では全スキルを返す。
+    各 SKILL.md の frontmatter `target:` を読み、本元 (IS_SOURCE = エル子) では
+    `target: project` のスキルを除外する。`target: both` または欠落時は両方で
+    使えると解釈する。プロジェクト (プル子) 側では全スキルを返す。
     """
     skills_dir = NXT_ROOT / SKILLS_DIR_NAME
     if not skills_dir.exists():
         return []
-    excluded = SOURCE_EXCLUDED_SKILLS if IS_SOURCE else frozenset()
-    return sorted(
-        d.name for d in skills_dir.iterdir()
-        if d.is_dir() and (d / SKILL_MD_FILENAME).exists() and d.name not in excluded
-    )
+
+    result: list[str] = []
+    for d in sorted(skills_dir.iterdir()):
+        if not d.is_dir():
+            continue
+        skill_md = d / SKILL_MD_FILENAME
+        if not skill_md.exists():
+            continue
+        target = _read_skill_target(skill_md)
+        if IS_SOURCE and target == "project":
+            continue
+        result.append(d.name)
+    return result
 
 
 def _rewrite_skill_paths(dst_dir: Path, nxt_path: str) -> None:

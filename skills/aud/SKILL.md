@@ -1,5 +1,6 @@
 ---
 name: aud
+target: both
 description: /aud - セッション中の作業監査。変更箇所の整合性・古いコード残骸・依存関係の食い違い・重複・仕様との齟齬を軽量チェックしてレポートする。
 effort: max
 ---
