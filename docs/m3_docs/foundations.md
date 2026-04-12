@@ -1,0 +1,5 @@
+# Foundations - Material Design 3 - Learn the basics of Material
+
+> Source: https://m3.material.io/foundations
+
+[Accessibility Accessible design enables users with diverse abilities to navigate, understand, and enjoy a UI.](/foundations/accessible-design/overview) [Content design UX writing and information design make UIs easy to use.](/foundations/content-design/overview) [Customizing Material M3 makes brand expression in an interface simpler and more beautiful than ever before.](/foundations/customization) [Design tokens Tokens store style values like colors and fonts so the same values can be used across designs, code, tools, and platforms.](/foundations/design-tokens/overview) [Interaction states States are visual indicators used to communicate the status of a component or interactive element.](/foundations/interaction-states) [Layout Layout is the visual arrangement of elements on the screen.](/foundations/layout/understanding-layout/overview) [Material A-Z Get to know the key terms and concepts behind Material, from A to Z.](/foundations/glossary) [Building for all Building for everyone with everyone](/foundations/building-for-all)

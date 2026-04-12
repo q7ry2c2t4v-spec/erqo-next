@@ -1,6 +1,7 @@
-"""docs.py — ドキュメント検索モジュール
+"""docs.py — デザインリファレンス検索モジュール
 
-.libs/docs/ 配下のデザインリファレンス（shadcn, tailwind, m3 等）を検索する。
+docs/ 配下のデザインリファレンス（Apple HIG, shadcn, tailwind, m3 等）を検索する。
+検索先は paths.DOCS_DIR (= NXT_ROOT / "docs") で、layo.py から呼ばれる。
 
 サブコマンド:
   python core/docs.py search card spacing    # キーワード検索
@@ -39,7 +40,7 @@ def _docs_dir() -> Path | None:
 
 
 def _categories() -> list[str]:
-    """カテゴリ一覧（.libs/docs/ 直下のフォルダ名）。"""
+    """カテゴリ一覧（docs/ 直下のフォルダ名）。"""
     d = _docs_dir()
     if not d:
         return []

@@ -87,7 +87,7 @@ def _collect_section_features(task_id: str, features_dir: Path) -> str:
 # --- ルール (スコープフィルタリング) ---
 
 
-def _collect_rules(rules_dir: Path, task_types: list[str]) -> str:
+def collect_rules(rules_dir: Path, task_types: list[str]) -> str:
     """プロジェクトルールをスコープフィルタリング付きでロードする。
 
     ルールファイル内の `適用:` メタデータを読み、task_types のいずれかに
@@ -237,16 +237,11 @@ def load_task(task_id: str) -> str:
         task_types = ["all"]
 
     if task_type == "layout":
-        # layout と ui のキーワードをマージして表示・docs 検索に使う
         merged_keywords = list(set(layout_result["docs_keywords"] + ui_result["docs_keywords"]))
         parts.append(
-            f"## レイアウト判定: レイアウトタスク (キーワード: {', '.join(merged_keywords)})"
+            f"## レイアウト判定: レイアウトタスク (キーワード: {', '.join(merged_keywords)})\n\n"
+            "デザインリファレンスは /layo で収集済み。/codi では本棚ページを参照して実装する。"
         )
-        if merged_keywords:
-            doc_results = docs_search(merged_keywords, max_results=10)
-            if doc_results:
-                doc_lines = [f"- {r['path']} (score: {r['score']})" for r in doc_results]
-                parts.append(f"## 関連ドキュメント\n\n" + "\n".join(doc_lines))
     elif task_type == "ui":
         parts.append(
             f"## UI 判定: UI タスク (キーワード: {', '.join(ui_result['docs_keywords'])})"
@@ -284,7 +279,7 @@ def load_task(task_id: str) -> str:
                 parts.append(f"## 関連ページ (他セクション)\n\n" + "\n---\n".join(related_lines))
 
     # --- ルール (スコープフィルタリング) ---
-    rules_content = _collect_rules(RULES_DIR, task_types)
+    rules_content = collect_rules(RULES_DIR, task_types)
     if rules_content:
         parts.append(f"## プロジェクトルール\n\n{rules_content}")
 

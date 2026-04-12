@@ -1,0 +1,286 @@
+# Native Select
+
+> Source: https://ui.shadcn.com/docs/components/radix/native-select
+
+Sections
+
+  * [Introduction](/docs)
+  * [Components](/docs/components)
+  * [Installation](/docs/installation)
+  * [Theming](/docs/theming)
+  * [CLI](/docs/cli)
+  * [RTL](/docs/rtl)
+  * [Skills](/docs/skills)
+  * [MCP Server](/docs/mcp)
+  * [Registry](/docs/registry)
+  * [Forms](/docs/forms)
+  * [Changelog](/docs/changelog)
+
+Components
+
+  * [Accordion](/docs/components/radix/accordion)
+  * [Alert](/docs/components/radix/alert)
+  * [Alert Dialog](/docs/components/radix/alert-dialog)
+  * [Aspect Ratio](/docs/components/radix/aspect-ratio)
+  * [Avatar](/docs/components/radix/avatar)
+  * [Badge](/docs/components/radix/badge)
+  * [Breadcrumb](/docs/components/radix/breadcrumb)
+  * [Button](/docs/components/radix/button)
+  * [Button Group](/docs/components/radix/button-group)
+  * [Calendar](/docs/components/radix/calendar)
+  * [Card](/docs/components/radix/card)
+  * [Carousel](/docs/components/radix/carousel)
+  * [Chart](/docs/components/radix/chart)
+  * [Checkbox](/docs/components/radix/checkbox)
+  * [Collapsible](/docs/components/radix/collapsible)
+  * [Combobox](/docs/components/radix/combobox)
+  * [Command](/docs/components/radix/command)
+  * [Context Menu](/docs/components/radix/context-menu)
+  * [Data Table](/docs/components/radix/data-table)
+  * [Date Picker](/docs/components/radix/date-picker)
+  * [Dialog](/docs/components/radix/dialog)
+  * [Direction](/docs/components/radix/direction)
+  * [Drawer](/docs/components/radix/drawer)
+  * [Dropdown Menu](/docs/components/radix/dropdown-menu)
+  * [Empty](/docs/components/radix/empty)
+  * [Field](/docs/components/radix/field)
+  * [Hover Card](/docs/components/radix/hover-card)
+  * [Input](/docs/components/radix/input)
+  * [Input Group](/docs/components/radix/input-group)
+  * [Input OTP](/docs/components/radix/input-otp)
+  * [Item](/docs/components/radix/item)
+  * [Kbd](/docs/components/radix/kbd)
+  * [Label](/docs/components/radix/label)
+  * [Menubar](/docs/components/radix/menubar)
+  * [Native Select](/docs/components/radix/native-select)
+  * [Navigation Menu](/docs/components/radix/navigation-menu)
+  * [Pagination](/docs/components/radix/pagination)
+  * [Popover](/docs/components/radix/popover)
+  * [Progress](/docs/components/radix/progress)
+  * [Radio Group](/docs/components/radix/radio-group)
+  * [Resizable](/docs/components/radix/resizable)
+  * [Scroll Area](/docs/components/radix/scroll-area)
+  * [Select](/docs/components/radix/select)
+  * [Separator](/docs/components/radix/separator)
+  * [Sheet](/docs/components/radix/sheet)
+  * [Sidebar](/docs/components/radix/sidebar)
+  * [Skeleton](/docs/components/radix/skeleton)
+  * [Slider](/docs/components/radix/slider)
+  * [Sonner](/docs/components/radix/sonner)
+  * [Spinner](/docs/components/radix/spinner)
+  * [Switch](/docs/components/radix/switch)
+  * [Table](/docs/components/radix/table)
+  * [Tabs](/docs/components/radix/tabs)
+  * [Textarea](/docs/components/radix/textarea)
+  * [Toast](/docs/components/radix/toast)
+  * [Toggle](/docs/components/radix/toggle)
+  * [Toggle Group](/docs/components/radix/toggle-group)
+  * [Tooltip](/docs/components/radix/tooltip)
+  * [Typography](/docs/components/radix/typography)
+
+Get Started
+
+  * [Installation](/docs/installation)
+  * [components.json](/docs/components-json)
+  * [Theming](/docs/theming)
+  * [Dark Mode](/docs/dark-mode)
+  * [CLI](/docs/cli)
+  * [Monorepo](/docs/monorepo)
+  * [Skills](/docs/skills)
+  * [Open in v0](/docs/v0)
+  * [JavaScript](/docs/javascript)
+  * [Figma](/docs/figma)
+  * [llms.txt](/llms.txt)
+  * [Legacy Docs](/docs/legacy)
+
+Forms
+
+  * [React Hook Form](/docs/forms/react-hook-form)
+  * [TanStack Form](/docs/forms/tanstack-form)
+
+Registry
+
+  * [Introduction](/docs/registry)
+  * [Getting Started](/docs/registry/getting-started)
+  * [Namespaces](/docs/registry/namespace)
+  * [Authentication](/docs/registry/authentication)
+  * [Examples](/docs/registry/examples)
+  * [MCP Server](/docs/registry/mcp)
+  * [Add a Registry](/docs/registry/registry-index)
+  * [Open in v0](/docs/registry/open-in-v0)
+  * [registry.json](/docs/registry/registry-json)
+  * [registry-item.json](/docs/registry/registry-item-json)
+
+# Native Select
+
+Copy Page
+
+[Previous](/docs/components/radix/menubar)[Next](/docs/components/radix/navigation-menu)
+
+A styled native HTML select element with consistent design system integration.
+
+[Radix UI](/docs/components/radix/native-select)[Base UI](/docs/components/base/native-select)
+
+Radix UI
+
+For a styled select component, see the [Select](/docs/components/select) component.
+
+Select statusTodoIn ProgressDoneCancelled
+
+Copy
+    
+    
+    import {
+      NativeSelect,
+      NativeSelectOption,
+
+View Code
+
+## Installation
+
+CommandManual
+    
+    
+    pnpmnpmyarnbun
+    
+    
+    pnpm dlx shadcn@latest add native-select
+
+Copy
+
+## Usage
+    
+    
+    Copyimport {
+      NativeSelect,
+      NativeSelectOptGroup,
+      NativeSelectOption,
+    } from "@/components/ui/native-select"
+    
+    
+    Copy<NativeSelect>
+      <NativeSelectOption value="">Select a fruit</NativeSelectOption>
+      <NativeSelectOption value="apple">Apple</NativeSelectOption>
+      <NativeSelectOption value="banana">Banana</NativeSelectOption>
+      <NativeSelectOption value="blueberry">Blueberry</NativeSelectOption>
+      <NativeSelectOption value="pineapple">Pineapple</NativeSelectOption>
+    </NativeSelect>
+
+## Examples
+
+### Groups
+
+Use `NativeSelectOptGroup` to organize options into categories.
+
+Select departmentFrontendBackendDevOpsSales RepAccount ManagerSales DirectorCustomer SupportProduct ManagerOperations Manager
+
+Copy
+    
+    
+    import {
+      NativeSelect,
+      NativeSelectOptGroup,
+
+View Code
+
+### Disabled
+
+Add the `disabled` prop to the `NativeSelect` component to disable the select.
+
+DisabledAppleBananaBlueberry
+
+Copy
+    
+    
+    import {
+      NativeSelect,
+      NativeSelectOption,
+
+View Code
+
+### Invalid
+
+Use `aria-invalid` to show validation errors and the `data-invalid` attribute to the `Field` component for styling.
+
+Error stateAppleBananaBlueberry
+
+Copy
+    
+    
+    import {
+      NativeSelect,
+      NativeSelectOption,
+
+View Code
+
+## Native Select vs Select
+
+  * Use `NativeSelect` for native browser behavior, better performance, or mobile-optimized dropdowns.
+  * Use `Select` for custom styling, animations, or complex interactions.
+
+## RTL
+
+To enable RTL support in shadcn/ui, see the [RTL configuration guide](/docs/rtl).
+
+Arabic (العربية)▼Toggle
+
+اختر الحالةمهامقيد التنفيذمنجزملغي
+
+Copy
+    
+    
+    "use client"
+    
+    import * as React from "react"
+
+View Code
+
+## API Reference
+
+### NativeSelect
+
+The main select component that wraps the native HTML select element.
+    
+    
+    Copy<NativeSelect>
+      <NativeSelectOption value="option1">Option 1</NativeSelectOption>
+      <NativeSelectOption value="option2">Option 2</NativeSelectOption>
+    </NativeSelect>
+
+### NativeSelectOption
+
+Represents an individual option within the select.
+
+Prop| Type| Default  
+---|---|---  
+`value`| `string`|   
+`disabled`| `boolean`| `false`  
+  
+### NativeSelectOptGroup
+
+Groups related options together for better organization.
+
+Prop| Type| Default  
+---|---|---  
+`label`| `string`|   
+`disabled`| `boolean`| `false`  
+      
+    
+    Copy<NativeSelectOptGroup label="Fruits">
+      <NativeSelectOption value="apple">Apple</NativeSelectOption>
+      <NativeSelectOption value="banana">Banana</NativeSelectOption>
+    </NativeSelectOptGroup>
+
+[ Menubar](/docs/components/radix/menubar)[Navigation Menu ](/docs/components/radix/navigation-menu)
+
+On This Page
+
+InstallationUsageExamplesGroupsDisabledInvalidNative Select vs SelectRTLAPI ReferenceNativeSelectNativeSelectOptionNativeSelectOptGroup
+
+Deploy your shadcn/ui app on Vercel
+
+Trusted by OpenAI, Sonos, Adobe, and more.
+
+Vercel provides tools and infrastructure to deploy apps and features at scale.
+
+Deploy Now[Deploy to Vercel](https://vercel.com/new?utm_source=shadcn_site&utm_medium=web&utm_campaign=docs_cta_deploy_now_callout)

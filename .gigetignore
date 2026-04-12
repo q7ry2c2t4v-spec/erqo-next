@@ -3,3 +3,5 @@
 .claude/
 .gitignore
 CLAUDE.md
+bootstrap.py
+release.sh

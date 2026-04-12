@@ -26,12 +26,13 @@
 |---|---|---|
 | `design/` | 大枠設計・タスク計画 | /dsgn, /tp |
 | `features/` | 実装済み機能の詳細記録 | /codi |
-| `docs/` | 外部ドキュメント参照 | 手動配置 |
 | `research/` | ウェブリサーチの調査結果 | /rsrc |
 | `rules/` | プロジェクトルール | /ruru |
 | `session-logs/` | セッションログ | /wrap |
-| `storybook/` | Storybook 部品の本棚正本 (1 部品 = 1 ページ) | /codi (レイアウト分岐) |
+| `storybook/` | レイアウトデザイン設計書の正本 (1 部品 = 1 ページ) | /layo |
 | `archive/` | アーカイブ | 自動 |
+
+**注:** デザインリファレンス (Apple HIG, shadcn, Tailwind, M3, Motion 等) は `.libs/` ではなく OS の `docs/` ディレクトリ（本元: `docs/`、プロジェクト: `.nxt-core/docs/`）に配置される。`core/layo.py` が自動検索する。
 
 ### 復元可能性の原則
 

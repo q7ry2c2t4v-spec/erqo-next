@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  /* カラー */
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+
+  /* フォント */
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  /* iOS セーフエリア */
+  --spacing-safe-top: env(safe-area-inset-top);
+  --spacing-safe-bottom: env(safe-area-inset-bottom);
+  --spacing-tap-min: 44px;
+}

@@ -25,7 +25,7 @@ CODING_DIR_NAME = "coding"
 
 STORYBOOK_SHELF_NAME = "storybook"
 LIBS_SHELVES = [
-    "design", "features", "docs", "research", "rules", "session-logs",
+    "design", "features", "research", "rules", "session-logs",
     STORYBOOK_SHELF_NAME, "archive",
 ]
 
@@ -100,6 +100,9 @@ DEFAULT_GITIGNORE_LINES = [
     ".claude/settings.local.json",
     "node_modules/",
     ".next/",
+    "storybook-static/",
+    "test-results/",
+    "playwright-report/",
 ]
 
 # --- 自動ステージング時のブラックリスト ---

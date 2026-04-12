@@ -60,7 +60,7 @@ SPECS_DIR = NXT_ROOT / SPECS_DIR_NAME
 DESIGN_DIR = LIBS_DIR / "design" if LIBS_DIR else None
 FEATURES_DIR = LIBS_DIR / "features" if LIBS_DIR else None
 RULES_DIR = LIBS_DIR / "rules" if LIBS_DIR else None
-DOCS_DIR = LIBS_DIR / "docs" if LIBS_DIR else None
+DOCS_DIR = NXT_ROOT / "docs"
 LOGS_DIR = LIBS_DIR / "session-logs" if LIBS_DIR else None
 
 # プロジェクト派生パス
