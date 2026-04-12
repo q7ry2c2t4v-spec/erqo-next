@@ -78,6 +78,11 @@ python "{nxt}/core/clone.py" recon $ARGUMENTS
 
 - URL がない場合 (テキストだけモード) はスキップされる (text-only.json マーカーで成功扱い)
 - 完了後、recon ディレクトリのスクショ画像を Read してユーザーに見せる
+- recon は自動で以下も取材する (段階 1 組み込み済):
+  - **採用ライブラリ同定** — GSAP / Motion / Lenis / Three.js / Lottie / Rive 等を `<script src>` + グローバル変数で検出
+  - **スクロール連動サンプリング** — ページ高さを 120 分割して `transform / opacity / filter` を実測
+  - **Lottie / Rive 自動 DL** — 検出時はバイナリを `recon/site-N/assets/` に保存
+- 取材根拠: **RSRC-WEBANIM-CAPTURE** (`.libs/research/webanim/`)
 
 ### ステップ 4: 本棚ページ生成 + 要望反映 + ルール適用
 

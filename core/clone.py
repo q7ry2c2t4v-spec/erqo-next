@@ -52,6 +52,18 @@ from constants import (
     BASELINE_NODE_TIMEOUT_SEC,
     BASELINE_OUTPUT_DIR_NAME,
     BASELINE_STORYBOOK_PORT,
+    ANIM_LIB_PATTERNS_FILENAME,
+    SCROLL_SAMPLING_STEPS,
+    SCROLL_TRACKED_SELECTORS,
+    SCROLL_SAMPLES_FILENAME,
+    RECON_ASSETS_DIR_NAME,
+    DIFF_NODE_SCRIPT_FILENAME,
+    DIFF_NODE_TIMEOUT_SEC,
+    DIFF_OUTPUT_DIR_NAME,
+    DIFF_IMAGE_PREFIX,
+    DIFF_RESULT_FILENAME,
+    DIFF_PIXELMATCH_THRESHOLD,
+    DIFF_MAX_MISMATCH_RATIO,
 )
 from page_parser import parse_header, parse_sections
 from feedback import init_error_handling
@@ -88,6 +100,9 @@ def _build_input_template(task_id: str) -> str:
         "\n"
         f"## {task_id}{RECON_REFERENCE_SECTION_SUFFIX} — 参考サイト\n"
         "- https://example.com/\n"
+        "\n"
+        f"## {task_id}.採用ライブラリ — 採用ライブラリ指定 (任意)\n"
+        "- (空欄なら recon 検出結果から自動選択。指定するなら gsap / motion / lenis / r3f / lottie / pure-css のいずれか)\n"
         "\n"
         f"## {task_id}.要望 — 要望\n"
         "- \n"
@@ -205,14 +220,35 @@ def _find_recon_script() -> tuple[Path | None, str]:
     return script, ""
 
 
+def _anim_lib_patterns_path() -> Path:
+    """clone_node/anim_lib_patterns.json のパスを返す。"""
+    return NXT_ROOT / "core" / RECON_NODE_DIR_NAME / ANIM_LIB_PATTERNS_FILENAME
+
+
+def _load_anim_lib_patterns() -> dict:
+    """SSOT の anim_lib_patterns.json を読み込む (Python 側から参照する用)。
+
+    recon.mjs も同じファイルを読むので、変更時の追従は本 JSON 1 箇所で済む。
+    """
+    path = _anim_lib_patterns_path()
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {"patterns": [], "selectPriority": []}
+
+
 def _run_node_recon(
     node_path: str,
     script: Path,
     url: str,
     output_dir: Path,
     viewports: list[tuple[str, tuple[int, int]]],
+    assets_dir: Path | None = None,
 ) -> tuple[bool, str]:
     """recon.mjs を 1 回起動して全ビューポートを一括取材する。
+
+    ライブラリ検出 / スクロールサンプリング / Lottie・Rive 自動 DL を有効にするため、
+    `--scroll-steps` / `--scroll-selectors` / `--assets-dir` を渡す。
 
     Returns: (success, message)
     """
@@ -221,6 +257,11 @@ def _run_node_recon(
     cmd = [node_path, str(script), url, str(output_dir)]
     for name, (w, h) in viewports:
         cmd.extend(["--viewport", f"{name}:{w}x{h}"])
+    cmd.extend(["--scroll-steps", str(SCROLL_SAMPLING_STEPS)])
+    cmd.extend(["--scroll-selectors", ",".join(SCROLL_TRACKED_SELECTORS)])
+    if assets_dir is not None:
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        cmd.extend(["--assets-dir", str(assets_dir)])
 
     # cwd はプロジェクトルート。Node の node_modules 解決が PROJECT_ROOT/node_modules/
     # に到達できるようにするため (recon.mjs が `import { chromium } from 'playwright'` で
@@ -369,11 +410,13 @@ def cmd_recon(task_id: str) -> None:
     captured_sites: list[Path] = []
     for i, url in enumerate(urls, 1):
         site_dir = output_dir / f"{RECON_SITE_DIR_PREFIX}{i}"
+        site_assets_dir = site_dir / RECON_ASSETS_DIR_NAME
         label = _slug_from_url(url)
         print()
         print(f"  [site-{i}] {label} -> {site_dir}")
         success, msg = _run_node_recon(
-            node_path, script_path, url, site_dir, viewports
+            node_path, script_path, url, site_dir, viewports,
+            assets_dir=site_assets_dir,
         )
         if not success:
             print(f"エラー (site-{i}): {msg}", file=sys.stderr)
@@ -646,6 +689,193 @@ def _format_animations_section(task_id: str, sites: list) -> list[str]:
     return lines
 
 
+def _format_libraries_section(task_id: str, sites: list) -> list[str]:
+    """採用ライブラリセクション — recon の detected / scriptsHit / globalsHit をまとめる。
+
+    RSRC-WEBANIM-CAPTURE §技術詳細 1 / RSRC-WEBANIM-REPLAY §使い分けマトリックス。
+    後工程 (/codi build) はこのセクションを読んで雛形を分岐する。
+    """
+    lines = [f"## {task_id}.採用ライブラリ — 採用ライブラリ", ""]
+    lines.append(
+        "> recon が検出したアニメーション / スクロール / スライダーライブラリ。"
+        "build が本セクションを読んで雛形を分岐する (gsap / motion / lenis / r3f / lottie / pure-css)。"
+    )
+    lines.append(
+        "> ユーザー指定がある場合は input.md の `採用ライブラリ` セクションで上書きできる。"
+    )
+    lines.append("")
+
+    patterns = _load_anim_lib_patterns()
+    name_to_label = {p["name"]: p.get("label", p["name"]) for p in patterns.get("patterns", [])}
+
+    aggregated: dict[str, set[int]] = {}
+    per_site: list[tuple[int, dict]] = []
+    for site in sites:
+        meta = site.get("meta") or {}
+        idx = meta.get("index")
+        if idx is None:
+            continue
+        merged = {}
+        for vp in (site.get("viewports") or {}).values():
+            libs = vp.get("libraries") or {}
+            for name in (libs.get("detected") or {}):
+                merged.setdefault(name, {"scripts": [], "globals": []})
+                merged[name]["scripts"].extend((libs.get("scriptsHit") or {}).get(name, []))
+                merged[name]["globals"].extend((libs.get("globalsHit") or {}).get(name, []))
+                aggregated.setdefault(name, set()).add(idx)
+        per_site.append((idx, merged))
+
+    if not aggregated:
+        lines.append("(ライブラリ検出なし — pure-CSS 想定で雛形を出す)")
+        lines.append("")
+        return lines
+
+    lines.append("### 集計 (複数サイト横断)")
+    lines.append("")
+    priority = list(patterns.get("selectPriority", []))
+    sorted_names = sorted(
+        aggregated.keys(),
+        key=lambda n: priority.index(n) if n in priority else len(priority),
+    )
+    for name in sorted_names:
+        sites_for = sorted(aggregated[name])
+        sites_str = ", ".join(f"site-{i}" for i in sites_for)
+        label = name_to_label.get(name, name)
+        lines.append(f"- **{label}** (`{name}`): {sites_str}")
+    lines.append("")
+
+    for idx, merged in per_site:
+        if not merged:
+            continue
+        lines.append(f"### site-{idx} の詳細")
+        lines.append("")
+        for name, hit in merged.items():
+            label = name_to_label.get(name, name)
+            scripts = list(dict.fromkeys(hit["scripts"]))[:3]
+            globals_ = list(dict.fromkeys(hit["globals"]))[:5]
+            lines.append(f"- **{label}** (`{name}`)")
+            if globals_:
+                lines.append(f"  - globals: `{', '.join(globals_)}`")
+            if scripts:
+                for s in scripts:
+                    lines.append(f"  - script: `{s}`")
+        lines.append("")
+
+    return lines
+
+
+def _format_scroll_mapping_section(task_id: str, sites: list) -> list[str]:
+    """スクロール連動マッピングセクション — 代表サンプルの抜粋 + 全量 JSON への参照。
+
+    RSRC-WEBANIM-CAPTURE §技術詳細 6 / RSRC-WEBANIM-REPLAY §2 "Motion" の useTransform LUT に使う。
+    """
+    lines = [f"## {task_id}.スクロール連動マッピング — スクロール連動マッピング", ""]
+    lines.append(
+        "> recon が desktop viewport で 120 分割サンプリングして記録した "
+        "`transform / opacity / filter` の実測値。build が代表 LUT を "
+        "`useTransform` / `ScrollTrigger.scrub` に差し込む根拠になる。"
+    )
+    lines.append("")
+
+    found = False
+    for site in sites:
+        meta = site.get("meta") or {}
+        idx = meta.get("index", "?")
+        for vp_name, vp in (site.get("viewports") or {}).items():
+            scroll_data = vp.get("scrollSamples")
+            if not scroll_data:
+                continue
+            samples = scroll_data.get("samples") or []
+            target_count = scroll_data.get("targetCount", 0)
+            if not samples or target_count == 0:
+                continue
+            found = True
+            lines.append(
+                f"### site-{idx} / {vp_name} "
+                f"({len(samples)} 段階 × {target_count} ターゲット)"
+            )
+            lines.append("")
+            # 代表 8 段階 (0, 1/7, 2/7, ..., 1/1) だけ抜粋して表示
+            n = len(samples)
+            indices = [round(k * (n - 1) / 7) for k in range(8)] if n >= 8 else list(range(n))
+            # 先頭ターゲット 3 個を横軸に
+            max_targets = 3
+            header_targets = [
+                t["sel"] for t in (samples[0].get("frame") or [])[:max_targets]
+            ]
+            if header_targets:
+                lines.append("| y(px) | " + " | ".join(header_targets) + " |")
+                lines.append("|---|" + "---|" * len(header_targets))
+                for i in indices:
+                    sample = samples[i]
+                    y = sample.get("y", "?")
+                    cells = []
+                    for t in (sample.get("frame") or [])[:max_targets]:
+                        transform = (t.get("transform") or "none").replace("|", "/")
+                        opacity = t.get("opacity", "?")
+                        cells.append(f"t=`{transform[:40]}` op={opacity}")
+                    lines.append(f"| {y} | " + " | ".join(cells) + " |")
+                lines.append("")
+            lines.append(
+                f"(全量は `recon/site-{idx}/{SCROLL_SAMPLES_FILENAME}` 参照)"
+            )
+            lines.append("")
+
+    if not found:
+        lines.append("(取材なし — recon 未実行または対象セレクタにマッチする要素がない)")
+        lines.append("")
+    return lines
+
+
+def _format_assets_section(task_id: str, sites: list) -> list[str]:
+    """アセット取材セクション — Lottie / Rive の自動 DL 一覧。
+
+    RSRC-WEBANIM-HARDCASE §5 "Lottie/Rive 検出"。build は本セクションを見て
+    `@lottiefiles/react-lottie-player` or `@rive-app/react-canvas` の雛形を出す。
+    """
+    lines = [f"## {task_id}.アセット取材 — アセット取材 (Lottie / Rive)", ""]
+    lines.append(
+        "> recon がネットワーク監視で自動 DL した Lottie JSON / Rive ファイル。"
+        "本棚ページからの相対パスで build 工程が埋め込む。"
+    )
+    lines.append("")
+
+    found = False
+    for site in sites:
+        meta = site.get("meta") or {}
+        idx = meta.get("index", "?")
+        site_path: Path | None = site.get("path")
+        if site_path is None:
+            continue
+        manifest_path = site_path / RECON_ASSETS_DIR_NAME / "manifest.json"
+        if not manifest_path.exists():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        assets = manifest.get("assets") or []
+        if not assets:
+            continue
+        found = True
+        lines.append(f"### site-{idx} ({len(assets)} ファイル)")
+        lines.append("")
+        for asset in assets[:10]:
+            kind = asset.get("kind", "?")
+            file_name = asset.get("fileName", "?")
+            size = asset.get("size", "?")
+            rel = f"recon/site-{idx}/{RECON_ASSETS_DIR_NAME}/{file_name}"
+            lines.append(
+                f"- **{kind}**: `{rel}` ({size} bytes) ← {asset.get('url', '?')}"
+            )
+        lines.append("")
+
+    if not found:
+        lines.append("(Lottie / Rive 検出なし)")
+        lines.append("")
+    return lines
+
+
 def _build_bookshelf_page(
     task_id: str, input_meta: dict, recon_data: dict
 ) -> str:
@@ -725,7 +955,10 @@ def _build_bookshelf_page(
                 lines.append(f"- `{size}` (出現 {count})")
             lines.append("")
 
+        lines.extend(_format_libraries_section(task_id, sites))
         lines.extend(_format_animations_section(task_id, sites))
+        lines.extend(_format_scroll_mapping_section(task_id, sites))
+        lines.extend(_format_assets_section(task_id, sites))
 
     # text-only モード
     elif mode == "text-only":
@@ -1170,7 +1403,7 @@ def _task_id_to_pascal(task_id: str) -> str:
 
 
 def _build_tsx_skeleton(task_id: str) -> str:
-    """.tsx 雛形 (コードフェンス付き)。"""
+    """.tsx 雛形 (コードフェンス付き) — pure-CSS / 既定フォールバック。"""
     pascal = _task_id_to_pascal(task_id)
     slug = _task_slug(task_id)
     code = (
@@ -1196,6 +1429,245 @@ def _build_tsx_skeleton(task_id: str) -> str:
         "}\n"
     )
     return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
+
+
+def _build_tsx_skeleton_motion(task_id: str) -> str:
+    """Motion for React (旧 Framer Motion) 雛形 — RSRC-WEBANIM-REPLAY §2。"""
+    pascal = _task_id_to_pascal(task_id)
+    slug = _task_slug(task_id)
+    code = (
+        "// src/components/SLUG/PASCAL.tsx\n"
+        "'use client';\n"
+        "\n"
+        "import { motion, useScroll, useTransform } from 'motion/react';\n"
+        "import { useRef } from 'react';\n"
+        "\n"
+        "export function PASCAL() {\n"
+        "  const ref = useRef<HTMLDivElement>(null);\n"
+        "  const { scrollYProgress } = useScroll({\n"
+        "    target: ref,\n"
+        "    offset: ['start end', 'end start'],\n"
+        "  });\n"
+        "  // スクロール連動マッピングセクションの LUT を [0..1] → 値へ差し込む\n"
+        "  const y = useTransform(scrollYProgress, [0, 0.5, 1], [0, -80, -160]);\n"
+        "  const opacity = useTransform(scrollYProgress, [0, 0.1, 0.9, 1], [0, 1, 1, 0]);\n"
+        "\n"
+        "  return (\n"
+        "    <motion.section\n"
+        "      ref={ref}\n"
+        "      style={{ y, opacity }}\n"
+        "      className=\"bg-extracted-001 text-extracted-002\"\n"
+        "    >\n"
+        "      {/* 要望反映 */}\n"
+        "    </motion.section>\n"
+        "  );\n"
+        "}\n"
+    )
+    return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
+
+
+def _build_tsx_skeleton_gsap(task_id: str) -> str:
+    """GSAP + ScrollTrigger + useGSAP 雛形 — RSRC-WEBANIM-REPLAY §2。"""
+    pascal = _task_id_to_pascal(task_id)
+    slug = _task_slug(task_id)
+    code = (
+        "// src/components/SLUG/PASCAL.tsx\n"
+        "'use client';\n"
+        "\n"
+        "import { useRef } from 'react';\n"
+        "import { gsap } from 'gsap';\n"
+        "import { ScrollTrigger } from 'gsap/ScrollTrigger';\n"
+        "import { useGSAP } from '@gsap/react';\n"
+        "\n"
+        "gsap.registerPlugin(useGSAP, ScrollTrigger);\n"
+        "\n"
+        "export function PASCAL() {\n"
+        "  const root = useRef<HTMLDivElement>(null);\n"
+        "  useGSAP(\n"
+        "    () => {\n"
+        "      gsap.to('.PASCAL-layer', {\n"
+        "        yPercent: -50,\n"
+        "        ease: 'none',\n"
+        "        scrollTrigger: {\n"
+        "          trigger: root.current,\n"
+        "          start: 'top top',\n"
+        "          end: '+=1200',\n"
+        "          scrub: 0.5,\n"
+        "          pin: true,\n"
+        "          anticipatePin: 1,\n"
+        "        },\n"
+        "      });\n"
+        "    },\n"
+        "    { scope: root, revertOnUpdate: true },\n"
+        "  );\n"
+        "\n"
+        "  return (\n"
+        "    <section ref={root} className=\"bg-extracted-001 text-extracted-002\">\n"
+        "      <div className=\"PASCAL-layer\">{/* 要望反映 */}</div>\n"
+        "    </section>\n"
+        "  );\n"
+        "}\n"
+    )
+    return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
+
+
+def _build_tsx_skeleton_lenis(task_id: str) -> str:
+    """Lenis ReactLenis + useLenis 雛形 — RSRC-WEBANIM-REPLAY §2。"""
+    pascal = _task_id_to_pascal(task_id)
+    slug = _task_slug(task_id)
+    code = (
+        "// src/components/SLUG/PASCAL.tsx\n"
+        "'use client';\n"
+        "\n"
+        "// Lenis は root provider 化が前提。`src/app/providers.tsx` に以下を追加する:\n"
+        "//   'use client';\n"
+        "//   import { ReactLenis } from 'lenis/react';\n"
+        "//   export function Providers({ children }: { children: React.ReactNode }) {\n"
+        "//     return <ReactLenis root>{children}</ReactLenis>;\n"
+        "//   }\n"
+        "// 既存の GSAP と併用する場合は `lenis.on('scroll', ScrollTrigger.update)` + `gsap.ticker.add(t => lenis.raf(t*1000))` で同期する。\n"
+        "\n"
+        "import { useLenis } from 'lenis/react';\n"
+        "\n"
+        "export function PASCAL() {\n"
+        "  useLenis(() => {\n"
+        "    // スクロール進捗を監視したいときに使う (任意)\n"
+        "  });\n"
+        "\n"
+        "  return (\n"
+        "    <section className=\"bg-extracted-001 text-extracted-002\">\n"
+        "      {/* 要望反映 */}\n"
+        "    </section>\n"
+        "  );\n"
+        "}\n"
+    )
+    return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
+
+
+def _build_tsx_skeleton_r3f(task_id: str) -> str:
+    """React Three Fiber 雛形 — RSRC-WEBANIM-REPLAY §6。"""
+    pascal = _task_id_to_pascal(task_id)
+    slug = _task_slug(task_id)
+    code = (
+        "// src/components/SLUG/PASCAL.tsx\n"
+        "'use client';\n"
+        "\n"
+        "import { Canvas, useFrame } from '@react-three/fiber';\n"
+        "import { useRef } from 'react';\n"
+        "import type { Mesh } from 'three';\n"
+        "\n"
+        "function PASCALScene() {\n"
+        "  const mesh = useRef<Mesh>(null);\n"
+        "  useFrame(({ clock }) => {\n"
+        "    if (mesh.current) mesh.current.rotation.y = clock.elapsedTime * 0.3;\n"
+        "  });\n"
+        "  return (\n"
+        "    <mesh ref={mesh}>\n"
+        "      <planeGeometry args={[2, 2]} />\n"
+        "      <meshBasicMaterial color=\"#ffffff\" />\n"
+        "    </mesh>\n"
+        "  );\n"
+        "}\n"
+        "\n"
+        "export function PASCAL() {\n"
+        "  return (\n"
+        "    <section className=\"relative h-[100vh] bg-extracted-001\">\n"
+        "      <Canvas className=\"absolute inset-0\" dpr={[1, 2]}>\n"
+        "        <ambientLight intensity={0.8} />\n"
+        "        <PASCALScene />\n"
+        "      </Canvas>\n"
+        "      {/* 要望反映 (DOM 側) */}\n"
+        "    </section>\n"
+        "  );\n"
+        "}\n"
+    )
+    return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
+
+
+def _build_tsx_skeleton_lottie(task_id: str) -> str:
+    """Lottie (@lottiefiles/react-lottie-player) 雛形 — RSRC-WEBANIM-HARDCASE §5。"""
+    pascal = _task_id_to_pascal(task_id)
+    slug = _task_slug(task_id)
+    code = (
+        "// src/components/SLUG/PASCAL.tsx\n"
+        "'use client';\n"
+        "\n"
+        "// recon が DL した JSON を `public/lottie/<slug>/` に置き、下の src パスを合わせる。\n"
+        "// 本棚ページの「アセット取材」セクションで recon 出力パスを確認すること。\n"
+        "\n"
+        "import { Player } from '@lottiefiles/react-lottie-player';\n"
+        "\n"
+        "export function PASCAL() {\n"
+        "  return (\n"
+        "    <section className=\"bg-extracted-001\">\n"
+        "      <Player\n"
+        "        autoplay\n"
+        "        loop\n"
+        "        src=\"/lottie/SLUG/animation.json\"\n"
+        "        style={{ height: 400 }}\n"
+        "      />\n"
+        "    </section>\n"
+        "  );\n"
+        "}\n"
+    )
+    return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
+
+
+# ライブラリ名 → 雛形関数 のマップ (selectPriority と同じキー体系)
+_TSX_SKELETON_BY_LIB = {
+    "gsap": _build_tsx_skeleton_gsap,
+    "scroll-trigger": _build_tsx_skeleton_gsap,  # ScrollTrigger 単体なら GSAP 雛形
+    "motion": _build_tsx_skeleton_motion,
+    "lenis": _build_tsx_skeleton_lenis,
+    "locomotive": _build_tsx_skeleton_lenis,     # Locomotive 代替として Lenis
+    "three": _build_tsx_skeleton_r3f,
+    "lottie": _build_tsx_skeleton_lottie,
+    "rive": _build_tsx_skeleton_lottie,          # Rive は lottie と同じ位置付け (別ライブラリ推奨)
+    "pure-css": _build_tsx_skeleton,
+}
+
+
+def _detect_adopted_library(task_id: str, page_md: str) -> tuple[str, str]:
+    """採用ライブラリを決定する (ユーザー指定 > recon 検出 > pure-css)。
+
+    Returns: (library_name, reason)
+    """
+    # 1. input.md のユーザー指定を確認
+    input_path = _input_path(task_id)
+    if input_path is not None and input_path.exists():
+        try:
+            input_content = input_path.read_text(encoding="utf-8")
+            for sec in parse_sections(input_content):
+                if not sec["id"].endswith(".採用ライブラリ"):
+                    continue
+                body = sec["content"].strip().lower()
+                for key in _TSX_SKELETON_BY_LIB:
+                    if re.search(rf"\b{re.escape(key)}\b", body):
+                        return key, f"input.md のユーザー指定 (`{key}`)"
+                if "r3f" in body or "three" in body:
+                    return "three", "input.md のユーザー指定 (three/r3f)"
+        except (OSError, UnicodeDecodeError):
+            pass
+
+    # 2. 本棚ページの「採用ライブラリ」セクションから detect 結果を読む
+    detected_names: list[str] = []
+    for sec in parse_sections(page_md):
+        if not sec["id"].endswith(".採用ライブラリ"):
+            continue
+        for line in sec["content"].split("\n"):
+            m = re.search(r"\(`([\w-]+)`\)", line)
+            if m:
+                detected_names.append(m.group(1))
+
+    if detected_names:
+        priority = _load_anim_lib_patterns().get("selectPriority", [])
+        for name in priority:
+            if name in detected_names:
+                return name, f"recon 検出から優先度選択 (`{name}`)"
+        # 優先度リストにない場合は最初の検出を使う
+        return detected_names[0], f"recon 検出 (`{detected_names[0]}`)"
+
+    return "pure-css", "検出なし — pure-CSS フォールバック"
 
 
 def _build_stories_skeleton(task_id: str) -> str:
@@ -1272,16 +1744,58 @@ def _build_vrt_spec_skeleton(task_id: str) -> str:
     )
 
 
-def _build_build_section(task_id: str) -> str:
-    """ビルド指示セクション (末尾改行なし)。"""
+def _build_build_section(task_id: str, page_md: str) -> str:
+    """ビルド指示セクション (末尾改行なし)。
+
+    本棚ページの `採用ライブラリ` セクションと input.md のユーザー指定から
+    採用ライブラリを決定し、対応する .tsx 雛形を出し分ける。
+    pure-css が選ばれた場合のみ、従来の framer-motion variants 前提の実装手順を維持する。
+    """
     pascal = _task_id_to_pascal(task_id)
     slug = _task_slug(task_id)
     target_dir = f"src/components/{slug}"
+    adopted, reason = _detect_adopted_library(task_id, page_md)
+    skeleton_fn = _TSX_SKELETON_BY_LIB.get(adopted, _build_tsx_skeleton)
+
+    # ライブラリ別の実装手順ヒント
+    lib_hints = {
+        "motion": (
+            "7. アニメは Motion for React (`motion/react`) の `useScroll` + `useTransform` を使う",
+            "8. LUT は本棚ページの「スクロール連動マッピング」セクションから代表値を移植する",
+        ),
+        "gsap": (
+            "7. アニメは `@gsap/react` の `useGSAP` + ScrollTrigger を使う (scope 指定必須)",
+            "8. scrub / pin / anticipatePin を本棚ページの「スクロール連動マッピング」に合わせる",
+        ),
+        "lenis": (
+            "7. Lenis は `app/providers.tsx` で `<ReactLenis root>` として配置する",
+            "8. GSAP 併用時は `lenis.on('scroll', ScrollTrigger.update)` で同期する",
+        ),
+        "three": (
+            "7. R3F Canvas は必ず Client Component。`ssr: false` の `dynamic` で包むのが安全",
+            "8. uniforms / shaderMaterial を使う場合は本棚ページの「WebGL 取材」(段階 2) を参照",
+        ),
+        "lottie": (
+            "7. DL 済 JSON/riv は `public/lottie/{slug}/` に置く (本棚ページ「アセット取材」参照)",
+            "8. サイズ / 速度の調整は Player props で行う (autoplay / loop / speed)",
+        ),
+        "pure-css": (
+            "7. アニメは `prefers-reduced-motion` で停止できるよう CSS `@keyframes` + `@media` で実装",
+        ),
+    }
+    tail_steps = lib_hints.get(adopted, lib_hints["pure-css"])
+
     lines = [
         f"## {task_id}.ビルド指示 — build 工程指示",
         "",
         "> build が生成。AI はこのセクション + 「要望反映指示」+ 「トークン定義」の 3 つを読んで",
         "> 下記の `.tsx` / `.stories.tsx` / VRT テストを生成する。",
+        "",
+        "### 採用ライブラリ",
+        "",
+        f"- 選択: **`{adopted}`**",
+        f"- 判定根拠: {reason}",
+        "- RSRC-WEBANIM-REPLAY §使い分けマトリックス に準拠",
         "",
         "### 生成先",
         "",
@@ -1299,11 +1813,13 @@ def _build_build_section(task_id: str) -> str:
         "4. iOS 対応ルール (safe-area-inset / 44px タップ領域) を遵守",
         "5. `.stories.tsx` で Default + Mobile の 2 story を作成 (VRT 基準に必要)",
         "6. `tests/vrt/` に VRT テストファイルを作成 (baseline 工程で基準スクショを自動撮影)",
-        "7. アニメは `prefers-reduced-motion` で停止できるよう framer motion variants で実装",
+    ]
+    lines.extend(tail_steps)
+    lines.extend([
         "",
         "### .tsx 雛形",
         "",
-        _build_tsx_skeleton(task_id),
+        skeleton_fn(task_id),
         "",
         "### .stories.tsx 雛形",
         "",
@@ -1312,7 +1828,7 @@ def _build_build_section(task_id: str) -> str:
         "### VRT テスト雛形",
         "",
         _build_vrt_spec_skeleton(task_id),
-    ]
+    ])
     return "\n".join(lines)
 
 
@@ -1336,7 +1852,7 @@ def cmd_build(task_id: str) -> None:
         print(f"エラー: 本棚ページ読み込み失敗: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    build_section = _build_build_section(task_id)
+    build_section = _build_build_section(task_id, page_md)
     new_page_md = _replace_or_append_section(
         page_md, f"{task_id}.ビルド指示", build_section
     )
@@ -1346,9 +1862,11 @@ def cmd_build(task_id: str) -> None:
 
     pascal = _task_id_to_pascal(task_id)
     slug = _task_slug(task_id)
+    adopted, _reason = _detect_adopted_library(task_id, page_md)
     print("clone build: ビルド指示を本棚ページに追記しました")
     print(f"  -> {page_path}")
     print(f"  コンポーネント名: {pascal}")
+    print(f"  採用ライブラリ: {adopted}")
     print(f"  生成先 (推奨): src/components/{slug}/{pascal}.tsx")
 
 
@@ -1490,6 +2008,150 @@ def _find_baseline_script() -> tuple[Path | None, str]:
     return script, ""
 
 
+def _find_diff_script() -> tuple[Path | None, str]:
+    """core/clone_node/diff.mjs の実パスを返す。"""
+    script = NXT_ROOT / "core" / RECON_NODE_DIR_NAME / DIFF_NODE_SCRIPT_FILENAME
+    if not script.exists():
+        return None, f"diff スクリプトが見つかりません: {script}"
+    return script, ""
+
+
+def _run_node_diff(
+    node_path: str,
+    script: Path,
+    baseline_png: Path,
+    reference_png: Path,
+    output_png: Path,
+    threshold: float,
+) -> tuple[bool, dict | str]:
+    """diff.mjs を呼んで元サイトと再現の差分を計測する。
+
+    Returns:
+        (True, {"mismatchRatio": float, "diffImage": str, ...}) on success
+        (False, error_message) on failure
+    """
+    output_png.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        node_path, str(script),
+        "--baseline", str(baseline_png),
+        "--reference", str(reference_png),
+        "--output", str(output_png),
+        "--threshold", str(threshold),
+    ]
+    cwd = PROJECT_ROOT if PROJECT_ROOT is not None else None
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=DIFF_NODE_TIMEOUT_SEC,
+            cwd=str(cwd) if cwd else None,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"タイムアウト ({DIFF_NODE_TIMEOUT_SEC} 秒)"
+    except OSError as exc:
+        return False, f"実行エラー: {exc}"
+
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()
+        return False, f"diff.mjs 失敗 (exit={result.returncode}): {stderr}"
+
+    # diff.mjs は最終行で JSON を吐く契約
+    stdout = (result.stdout or "").strip()
+    json_line = ""
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            json_line = line
+            break
+    if not json_line:
+        return False, f"diff.mjs の JSON 出力が見つかりません: {stdout}"
+    try:
+        return True, json.loads(json_line)
+    except json.JSONDecodeError as exc:
+        return False, f"diff.mjs の JSON パース失敗: {exc}"
+
+
+def _compare_recon_vs_baseline(task_id: str, page_path: Path) -> None:
+    """元サイトの recon スクショと再現の baseline スクショを pixelmatch で比較する。
+
+    結果を `.libs/storybook/<slug>/diff/diff-result.json` と `diff-<viewport>.png` に保存する。
+    段階 1 では「レポートのみ」。閾値超過時の自動修正ループは段階 5。
+    """
+    task_dir = page_path.parent
+    recon_dir = task_dir / RECON_OUTPUT_DIR_NAME
+    baseline_dir = task_dir / BASELINE_OUTPUT_DIR_NAME
+    diff_dir = task_dir / DIFF_OUTPUT_DIR_NAME
+    if not recon_dir.exists():
+        print("clone baseline: recon/ がないため差分検証をスキップします")
+        return
+    if not baseline_dir.exists():
+        print("clone baseline: baseline/ がないため差分検証をスキップします")
+        return
+
+    node_path, node_err = _find_node_executable()
+    if node_path is None:
+        print(f"警告 (差分検証スキップ): {node_err}", file=sys.stderr)
+        return
+    diff_script, script_err = _find_diff_script()
+    if diff_script is None:
+        print(f"警告 (差分検証スキップ): {script_err}", file=sys.stderr)
+        return
+
+    # site-1 を代表取材として比較する (複数サイト統合は段階 5 で扱う)
+    first_site = recon_dir / f"{RECON_SITE_DIR_PREFIX}1"
+    if not first_site.exists():
+        print("clone baseline: recon/site-1 が見つかりません。差分検証をスキップ")
+        return
+
+    results = []
+    for name, _vp, screenshot_filename, _json in RECON_VIEWPORTS:
+        reference_png = first_site / screenshot_filename
+        baseline_png = baseline_dir / f"baseline-{name}.png"
+        if not reference_png.exists() or not baseline_png.exists():
+            continue
+        output_png = diff_dir / f"{DIFF_IMAGE_PREFIX}{name}.png"
+        ok, payload = _run_node_diff(
+            node_path, diff_script,
+            baseline_png, reference_png, output_png,
+            DIFF_PIXELMATCH_THRESHOLD,
+        )
+        if not ok:
+            print(f"警告 (差分検証 {name}): {payload}", file=sys.stderr)
+            continue
+        ratio = float(payload.get("mismatchRatio", 0.0))
+        verdict = "OK" if ratio <= DIFF_MAX_MISMATCH_RATIO else "要改善"
+        print(
+            f"  [diff {name}] 差分率 {ratio * 100:.2f}% ({verdict}) -> {output_png}"
+        )
+        results.append({
+            "viewport": name,
+            "baseline": str(baseline_png.relative_to(task_dir)).replace("\\", "/"),
+            "reference": str(reference_png.relative_to(task_dir)).replace("\\", "/"),
+            "diff": str(output_png.relative_to(task_dir)).replace("\\", "/"),
+            "mismatchRatio": ratio,
+            "verdict": verdict,
+            **{k: v for k, v in payload.items() if k != "mismatchRatio"},
+        })
+
+    if not results:
+        return
+
+    diff_dir.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "task_id": task_id,
+        "threshold": DIFF_PIXELMATCH_THRESHOLD,
+        "maxMismatchRatio": DIFF_MAX_MISMATCH_RATIO,
+        "results": results,
+    }
+    (diff_dir / DIFF_RESULT_FILENAME).write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _run_node_baseline(
     node_path: str,
     script: Path,
@@ -1612,6 +2274,13 @@ def cmd_baseline(task_id: str) -> None:
     print("clone baseline: 基準スクショの撮影完了")
     print(f"  本棚ページ: {page_path}")
     print(f"  スクショ: {output_dir}")
+
+    # --- 段階 1: 元サイト vs 再現の差分検証 (pixelmatch) ---
+    # RSRC-WEBANIM-HARDCASE §7 "VRT 差分自動修正ループ" のレポート部分のみ実装。
+    # 自動修正は段階 5 (別セッション)。ここでは数値と画像を保存するだけ。
+    print()
+    print("clone baseline: 元サイト vs 再現の差分を計測します (レポートのみ)")
+    _compare_recon_vs_baseline(task_id, page_path)
 
 
 # --- ディスパッチ ---

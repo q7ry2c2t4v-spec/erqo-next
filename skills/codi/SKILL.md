@@ -111,7 +111,9 @@ task_id が `LAYOUT-*` / `PAGE-*` / `CLONE-*` / `DESIGN-*` のいずれかで始
 ```bash
 # 2-1. 部品実装 (本棚ページのビルド指示 + 雛形を読み .tsx / .stories.tsx を書く)
 python "{nxt}/core/clone.py" build $ARGUMENTS
-# → AI がここで本棚ページを読み、実際の .tsx / .stories.tsx を src/components/<slug>/ に作成
+# → build は本棚ページの「採用ライブラリ」セクションを読み、対応する .tsx 雛形を選択する
+#    (gsap / motion / lenis / r3f / lottie / pure-css)。AI はその雛形を元に実装。
+#    詳細: RSRC-WEBANIM-REPLAY §使い分けマトリックス
 python "{nxt}/core/state.py" $ARGUMENTS complete_substep build
 
 # 2-2. ページ統合 (page.tsx 組み込み + Next.js Metadata + JSON-LD)
@@ -119,15 +121,18 @@ python "{nxt}/core/clone.py" assemble $ARGUMENTS
 # → AI が assemble 指示セクションを読んで実際に page.tsx を編集
 python "{nxt}/core/state.py" $ARGUMENTS complete_substep assemble
 
-# 2-3. VRT 基準スクショ (pixel-perfect threshold:0 基準を保存)
+# 2-3. VRT 基準スクショ (pixel-perfect threshold:0 基準を保存) + 元サイト差分計測
 python "{nxt}/core/clone.py" baseline $ARGUMENTS
-# → baseline.mjs が自動実行: Storybook 起動 → 各ビューポートでスクショ撮影 → 停止
+# → baseline.mjs が Storybook 起動 → 各ビューポートでスクショ → 停止
+# → その後 diff.mjs が元サイトの recon スクショと再現 baseline を pixelmatch で比較し、
+#    差分率を diff/diff-result.json に保存する (レポートのみ、自動修正は段階 5)
 python "{nxt}/core/state.py" $ARGUMENTS complete_substep baseline
 ```
 
 **重要:**
 - **本棚ページが正本**。`.tsx` / `.stories.tsx` を直接編集してはいけない（デザイン修正は `/layo` で行う）。
 - デザインを変更したくなったら `/layo $ARGUMENTS` を再実行し、その後 `/codi` の build 以降を再実行する。
+- baseline 後の差分率は後工程の record.py が features ページに「再現度検証」として転記する。
 
 #### 2 共通: 完了記録
 

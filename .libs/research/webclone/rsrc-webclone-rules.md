@@ -1,6 +1,6 @@
 # RSRC-WEBCLONE-RULES — ウェブクローン適用ルールと Storybook 管理方針
 
-関連: RSRC-WEBCLONE-STORYBOOK, RSRC-WEBCLONE-PIPELINE, RSRC-WEBCLONE-CODI-INTEGRATION
+関連: RSRC-WEBCLONE-STORYBOOK, RSRC-WEBCLONE-PIPELINE, RSRC-WEBCLONE-CODI-INTEGRATION, RSRC-WEBANIM-CAPTURE, RSRC-WEBANIM-REPLAY, RSRC-WEBANIM-HARDCASE
 タグ: ルール, ハードコーディング禁止, iOS対応, SEO, Storybook管理, 本棚正本原則, no-hardcoding, ios, safe-area, viewport-fit, seo, metadata, json-ld, storybook-management, single-source-of-truth
 
 ## RSRC-WEBCLONE-RULES.概要 — 概要
@@ -161,35 +161,15 @@ JCodesMore のテンプレートは shadcn/ui を採用している。shadcn/ui 
 - shadcn/ui のテーマ変数 (`--background`, `--foreground` 等) と `@theme` の `--color-extracted-*` をどう統合するか
 - アクセシビリティ (Radix UI) の恩恵を受けつつ、見た目は元サイトに合わせる方法
 
-### 2. framer motion への対応
+### 2. アニメーション / WebGL / スクロール連動への対応 (移譲済)
 
-スクロール連動・ホバーアニメ・ページ遷移などに使われる定番ライブラリ。
+旧 §2 (framer motion) / §3 (three.js) / §4 (アニメーション解析と管理) の 3 項目は、**RSRC-WEBANIM-CAPTURE** / **RSRC-WEBANIM-REPLAY** / **RSRC-WEBANIM-HARDCASE** に詳細設計を移譲した。以後の更新はそちら 3 ページ側で行う。
 
-**検討点:**
-- 元サイトの CSS animation / transition / keyframes を framer motion の `motion.div` の `animate` / `variants` にどうマッピングするか
-- スクロール連動 (`useScroll`, `useTransform`) を Phase 3 spec の「states & behaviors」からどう生成するか
-- アニメーションの timing (`duration`, `ease`) を CSS から framer motion props に変換する手順
+- 取材手法 (WAAPI / ライブラリ同定 / スクロールサンプリング / WebGL 取材 / Lottie・Rive 検出): **RSRC-WEBANIM-CAPTURE**
+- 再現実装 (Motion for React / GSAP+ScrollTrigger / Lenis / CSS scroll-timeline / View Transitions / R3F): **RSRC-WEBANIM-REPLAY**
+- 難所攻略 (Spector.js / 時間偽装 / rrweb / Vision LLM / VRT 差分ループ): **RSRC-WEBANIM-HARDCASE**
 
-### 3. three.js への対応
-
-3D 表現・WebGL を使ったページの再現。元サイトが three.js を使っている場合、DOM 解析だけでは情報が取れない。
-
-**検討点:**
-- canvas 内のシーン情報を取得する方法 (Spector.js / Three Inspector 等のリサーチ必要)
-- shader / geometry / texture の抽出と再現
-- スクショベースだと特に苦手なので、別アプローチが必要
-
-### 4. アニメーション・エフェクトの解析と管理
-
-「模倣したいアニメーション」の取材・記録・実装の流れ。
-
-**検討点:**
-- Playwright で `Animation` API (`element.getAnimations()`) や `KeyframeEffect` を取得できるか
-- Lenis などのスムーススクロールライブラリの検出と再現方法
-- アニメーション仕様を本棚ページにどう書くか (動画リンク + keyframes + duration + ease)
-- 「動き」専用の本棚棚 (`motion/`?) を分けるか、各部品ページに統合するか
-
-これらは次セッション以降で 1 つずつ深掘りしてリサーチページに追加する。
+実装は `core/clone_node/recon.mjs` / `core/clone.py` / `core/clone_node/diff.mjs` に段階投入する (段階 1 で基本セットを組み込み済み)。
 
 ## RSRC-WEBCLONE-RULES.出典 — 出典
 

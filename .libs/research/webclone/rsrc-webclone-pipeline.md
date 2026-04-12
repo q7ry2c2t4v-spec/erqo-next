@@ -1,6 +1,6 @@
 # RSRC-WEBCLONE-PIPELINE — 最高精度ウェブクローンの実装手順
 
-関連: RSRC-WEBCLONE-STORYBOOK, RSRC-WEBCLONE-RULES, RSRC-WEBCLONE-CODI-INTEGRATION
+関連: RSRC-WEBCLONE-STORYBOOK, RSRC-WEBCLONE-RULES, RSRC-WEBCLONE-CODI-INTEGRATION, RSRC-WEBANIM-CAPTURE
 タグ: 実装手順, パイプライン, 5フェーズ, 最高精度, ピクセルパーフェクト, tailwind-v4, theme, csf, vrt, jcodesmore, pipeline, recon, foundation, spec, build, qa
 
 ## RSRC-WEBCLONE-PIPELINE.概要 — 概要
@@ -19,6 +19,7 @@
 4. **アセット enumeration** — `<img>`, `<video>`, CSS の `background-image` を URL リスト化 (JS スニペットで一括取得)
 5. **インタラクション全 sweep** — scroll / click / hover / responsive を踏破し、`docs/research/BEHAVIORS.md` に記録
 6. **ページトポロジー** — section の上から順、fixed vs flow、z-index、interaction model (scroll-driven / click-driven / static / time-driven) を `docs/research/PAGE_TOPOLOGY.md` に書く
+7. **アニメーション / ライブラリ / スクロール連動 / Lottie・Rive** — WAAPI dump + ライブラリ同定 + 120 分割サンプリング + 自動 DL。詳細は **RSRC-WEBANIM-CAPTURE §技術詳細** を参照。recon.mjs が自動実行する
 
 **出力:** スクショ 2 枚 + BEHAVIORS.md + PAGE_TOPOLOGY.md + assets JSON
 

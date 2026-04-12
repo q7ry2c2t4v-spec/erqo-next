@@ -1,0 +1,88 @@
+{
+  "_comment": "アニメーションライブラリ検出パターン — recon.mjs / clone.py 共通 SSOT。RSRC-WEBANIM-CAPTURE §技術詳細 1 に準拠。編集は本ファイルのみ (両言語からの import がここに集約される)。",
+  "patterns": [
+    {
+      "name": "gsap",
+      "scriptSrcRegex": "(gsap(\\.min)?\\.js|gsap/dist/|TweenMax|TweenLite)",
+      "globals": ["gsap", "TweenMax", "TweenLite", "TimelineMax", "TimelineLite"],
+      "replayLibrary": "gsap",
+      "label": "GSAP"
+    },
+    {
+      "name": "scroll-trigger",
+      "scriptSrcRegex": "ScrollTrigger",
+      "globals": ["ScrollTrigger"],
+      "replayLibrary": "gsap",
+      "label": "GSAP ScrollTrigger"
+    },
+    {
+      "name": "motion",
+      "scriptSrcRegex": "(framer-motion|motion/react|motion\\.(min\\.)?js|/motion@)",
+      "globals": ["Motion"],
+      "replayLibrary": "motion",
+      "label": "Motion (旧 Framer Motion)"
+    },
+    {
+      "name": "lenis",
+      "scriptSrcRegex": "(/lenis(\\.min)?\\.js|@studio-freight/lenis|darkroomengineering/lenis)",
+      "globals": ["Lenis"],
+      "replayLibrary": "lenis",
+      "label": "Lenis"
+    },
+    {
+      "name": "locomotive",
+      "scriptSrcRegex": "locomotive-scroll",
+      "globals": ["LocomotiveScroll"],
+      "replayLibrary": "lenis",
+      "label": "Locomotive Scroll"
+    },
+    {
+      "name": "three",
+      "scriptSrcRegex": "(three(\\.min)?\\.js|three/build/|three/examples/|three@)",
+      "globals": ["THREE"],
+      "replayLibrary": "r3f",
+      "label": "Three.js"
+    },
+    {
+      "name": "swiper",
+      "scriptSrcRegex": "swiper(-bundle|\\.esm|\\.min)?\\.(js|mjs)",
+      "globals": ["Swiper"],
+      "replayLibrary": "swiper",
+      "label": "Swiper"
+    },
+    {
+      "name": "splide",
+      "scriptSrcRegex": "splide(\\.min)?\\.js",
+      "globals": ["Splide"],
+      "replayLibrary": "splide",
+      "label": "Splide"
+    },
+    {
+      "name": "lottie",
+      "scriptSrcRegex": "(lottie-web|@lottiefiles/|lottie\\.(min\\.)?js)",
+      "globals": ["lottie", "bodymovin"],
+      "replayLibrary": "lottie",
+      "label": "Lottie"
+    },
+    {
+      "name": "rive",
+      "scriptSrcRegex": "(@rive-app/|rive-wasm|rive\\.(min\\.)?js)",
+      "globals": ["rive"],
+      "replayLibrary": "rive",
+      "label": "Rive"
+    }
+  ],
+  "selectPriority": [
+    "three",
+    "gsap",
+    "scroll-trigger",
+    "motion",
+    "lenis",
+    "locomotive",
+    "lottie",
+    "rive",
+    "swiper",
+    "splide",
+    "pure-css"
+  ]
+}

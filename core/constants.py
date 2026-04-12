@@ -242,6 +242,49 @@ BASELINE_OUTPUT_DIR_NAME = "baseline"
 BASELINE_STORYBOOK_PORT = 6099
 BASELINE_SCREENSHOT_PREFIX = "baseline-"
 
+# --- recon: アニメーションライブラリ検出 / スクロールサンプリング / アセット取得 ---
+# 検出パターン DB は recon.mjs (Node) と clone.py (Python) の両方から参照するため、
+# core/clone_node/anim_lib_patterns.json を SSOT とする。編集はこの JSON 1 箇所のみ。
+# RSRC-WEBANIM-CAPTURE §技術詳細 1 "ライブラリ同定" に準拠。
+
+ANIM_LIB_PATTERNS_FILENAME = "anim_lib_patterns.json"
+
+# スクロール連動サンプリング (ページ高さを何段階で sweep するか)
+# RSRC-WEBANIM-CAPTURE §技術詳細 6 "スクロール連動マッピングの抽出"
+SCROLL_SAMPLING_STEPS = 120
+
+# スクロール連動の観察対象セレクタ (recon.mjs へ CLI 引数で渡す)
+# 採用基準: 意味タグ + アニメ命名の慣用クラス。過不足は recon 結果で調整する。
+SCROLL_TRACKED_SELECTORS = (
+    "[data-anim]",
+    "section",
+    "[class*=parallax]",
+    "[class*=reveal]",
+    "[class*=sticky]",
+    "[class*=fade]",
+    "[class*=slide]",
+)
+
+# --- recon: Lottie / Rive 自動検出 ---
+# page.on('response') で拾うレスポンス URL / コンテンツのパターン。
+# recon.mjs は内部定数として同じ regex を 1 度だけ使う (L1 §1.4 例外)。
+# Lottie 判定: レスポンス JSON に "v" と "layers" が含まれるか (BodyMovin 形式)
+# Rive 判定: 拡張子 .riv またはマジックバイト "RIVE"
+
+RECON_ASSETS_DIR_NAME = "assets"
+SCROLL_SAMPLES_FILENAME = "scroll-samples.json"
+
+# --- diff: 元サイト vs 再現の差分検証 (段階 1: レポートのみ、自動修正は段階 5) ---
+DIFF_NODE_SCRIPT_FILENAME = "diff.mjs"
+DIFF_NODE_TIMEOUT_SEC = 60
+DIFF_OUTPUT_DIR_NAME = "diff"
+DIFF_IMAGE_PREFIX = "diff-"
+DIFF_RESULT_FILENAME = "diff-result.json"
+# pixelmatch の色差許容 (0.0=完全一致, 1.0=全許容)
+DIFF_PIXELMATCH_THRESHOLD = 0.1
+# 「再現度不足」と features ページに記録する上限差分率
+DIFF_MAX_MISMATCH_RATIO = 0.05
+
 # --- コーディングルール判定 (coding_rules.py) ---
 # ファイル拡張子からカテゴリを機械判定するための定数。
 # AI の自己判断を排除する (specs/08-responsibility.md)。
