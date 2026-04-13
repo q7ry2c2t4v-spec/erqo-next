@@ -35,6 +35,7 @@ import { chromium } from 'playwright';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { captureWebGLShaders } from './spector.mjs';
 
 // --- 引数パース ---
 
@@ -269,6 +270,23 @@ function collectReport(patterns) {
     articleCount: document.querySelectorAll('article').length,
   };
 
+  // --- WebGL 検出 (段階 2: RSRC-WEBANIM-HARDCASE §1) ---
+  // canvas が WebGL/WebGL2 コンテキストを保有しているかを確認する。
+  // getContext は同一種別なら既存コンテキストを返すだけで副作用なし。
+  const canvasElements = [...document.querySelectorAll('canvas')];
+  let hasWebGL = false;
+  for (const c of canvasElements) {
+    try {
+      if (c.getContext('webgl2') || c.getContext('webgl')) {
+        hasWebGL = true;
+        break;
+      }
+    } catch {
+      /* 取得失敗は無視 */
+    }
+  }
+  const webgl = { hasWebGL, canvasCount: canvasElements.length };
+
   return {
     url: window.location.href,
     title: document.title || null,
@@ -290,6 +308,7 @@ function collectReport(patterns) {
     libraries,
     interactions,
     topology,
+    webgl,
   };
 }
 
@@ -465,6 +484,35 @@ async function main() {
           );
         } catch (e) {
           console.error(`recon-warn スクロールサンプリング失敗: ${e.message}`);
+        }
+      }
+
+      // --- WebGL シェーダ取材 (段階 2: RSRC-WEBANIM-HARDCASE §1) ---
+      // hasWebGL=true のときだけ Spector.js を注入してシェーダを取得。
+      // 失敗しても recon 全体は止めない (HARDCASE §1「9 割再現」方針)。
+      // capture が成功したら programs 0 件でも shaders.json に残す (デバッグ + 後段参照用)。
+      if (vpIdx === 0 && report.webgl?.hasWebGL) {
+        try {
+          const shaders = await captureWebGLShaders(page);
+          if (shaders) {
+            const webglDir = join(outputDir, 'webgl');
+            await mkdir(webglDir, { recursive: true });
+            const shadersPath = join(webglDir, 'shaders.json');
+            await writeFile(
+              shadersPath,
+              JSON.stringify(shaders, null, 2),
+              'utf-8',
+            );
+            const programCount = Array.isArray(shaders.programs) ? shaders.programs.length : 0;
+            console.log(
+              `recon-webgl programs=${programCount} ` +
+                `commands=${shaders.commandCount} file=${shadersPath}`
+            );
+          } else {
+            console.log('recon-webgl capture null (タイムアウト or canvas 未検出)');
+          }
+        } catch (e) {
+          console.error(`recon-warn WebGL capture 失敗: ${e.message}`);
         }
       }
 

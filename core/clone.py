@@ -64,6 +64,8 @@ from constants import (
     DIFF_RESULT_FILENAME,
     DIFF_PIXELMATCH_THRESHOLD,
     DIFF_MAX_MISMATCH_RATIO,
+    WEBGL_OUTPUT_DIR_NAME,
+    WEBGL_SHADERS_FILENAME,
 )
 from page_parser import parse_header, parse_sections
 from feedback import init_error_handling
@@ -877,6 +879,85 @@ def _format_assets_section(task_id: str, sites: list) -> list[str]:
     return lines
 
 
+def _format_webgl_section(task_id: str, sites: list) -> list[str]:
+    """WebGL / シェーダ取材セクション — 段階 2 で追加。
+
+    RSRC-WEBANIM-HARDCASE §1 "WebGL 完全取材"。
+    recon が WebGL 標準 API (getAttachedShaders + getShaderSource) で
+    取得した shaders.json を読んで programs の要約 + シェーダ抜粋を出力する。
+    build の r3f 雛形は本セクション + shaders.json を読んで shaderMaterial を差し込む。
+    """
+    lines = [f"## {task_id}.WebGL — WebGL / シェーダ取材", ""]
+    lines.append(
+        "> recon (段階 2) が WebGL 標準 API で抽出した CURRENT_PROGRAM のシェーダ。"
+        f"全文は `recon/site-<i>/{WEBGL_OUTPUT_DIR_NAME}/{WEBGL_SHADERS_FILENAME}` 参照。"
+    )
+    lines.append(
+        "> build の `r3f` 雛形が本セクションを読んで `shaderMaterial` "
+        "(vertexShader / fragmentShader) に GLSL を貼り込む。"
+    )
+    lines.append("")
+
+    found = False
+    for site in sites:
+        meta = site.get("meta") or {}
+        idx = meta.get("index", "?")
+        site_path: Path | None = site.get("path")
+        if site_path is None:
+            continue
+        shaders_path = site_path / WEBGL_OUTPUT_DIR_NAME / WEBGL_SHADERS_FILENAME
+        if not shaders_path.exists():
+            continue
+        try:
+            shaders = json.loads(shaders_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        programs = shaders.get("programs") or []
+        if not programs:
+            continue
+        found = True
+        canvases = shaders.get("canvases") or []
+        primary_canvas = canvases[0] if canvases else {}
+        lines.append(
+            f"### site-{idx} "
+            f"(programs={len(programs)} / canvases={len(canvases)} / "
+            f"primary={primary_canvas.get('width', '?')}x{primary_canvas.get('height', '?')})"
+        )
+        lines.append("")
+
+        for i, prog in enumerate(programs[:3], 1):
+            lines.append(f"#### program #{i} (id={prog.get('id', '?')})")
+            lines.append("")
+            vs_src = prog.get("vertexShader") or ""
+            fs_src = prog.get("fragmentShader") or ""
+            if vs_src:
+                preview = "\n".join(vs_src.splitlines()[:20])
+                lines.append("**vertex shader (先頭 20 行)**")
+                lines.append("")
+                lines.append("```glsl")
+                lines.append(preview)
+                lines.append("```")
+                lines.append("")
+            if fs_src:
+                preview = "\n".join(fs_src.splitlines()[:20])
+                lines.append("**fragment shader (先頭 20 行)**")
+                lines.append("")
+                lines.append("```glsl")
+                lines.append(preview)
+                lines.append("```")
+                lines.append("")
+        if len(programs) > 3:
+            lines.append(
+                f"(他 {len(programs) - 3} program は `{WEBGL_SHADERS_FILENAME}` 参照)"
+            )
+            lines.append("")
+
+    if not found:
+        lines.append("(WebGL 検出なし — canvas WebGL context 未使用 or capture 失敗)")
+        lines.append("")
+    return lines
+
+
 def _build_bookshelf_page(
     task_id: str, input_meta: dict, recon_data: dict
 ) -> str:
@@ -960,6 +1041,7 @@ def _build_bookshelf_page(
         lines.extend(_format_animations_section(task_id, sites))
         lines.extend(_format_scroll_mapping_section(task_id, sites))
         lines.extend(_format_assets_section(task_id, sites))
+        lines.extend(_format_webgl_section(task_id, sites))
 
     # text-only モード
     elif mode == "text-only":
@@ -1545,8 +1627,35 @@ def _build_tsx_skeleton_lenis(task_id: str) -> str:
     return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
 
 
+def _find_shaders_json(task_id: str) -> Path | None:
+    """task の site-1 に shaders.json があればパスを返す (段階 2)。"""
+    input_path = _input_path(task_id)
+    if input_path is None:
+        return None
+    recon_dir = input_path.parent / RECON_OUTPUT_DIR_NAME
+    shaders = (
+        recon_dir
+        / f"{RECON_SITE_DIR_PREFIX}1"
+        / WEBGL_OUTPUT_DIR_NAME
+        / WEBGL_SHADERS_FILENAME
+    )
+    return shaders if shaders.exists() else None
+
+
 def _build_tsx_skeleton_r3f(task_id: str) -> str:
-    """React Three Fiber 雛形 — RSRC-WEBANIM-REPLAY §6。"""
+    """React Three Fiber 雛形。
+
+    shaders.json があれば shaderMaterial + GLSL 貼り込み版 (段階 2)、
+    なければ planeGeometry + meshBasicMaterial のデフォルト雛形を返す。
+    RSRC-WEBANIM-REPLAY §6 / RSRC-WEBANIM-HARDCASE §1。
+    """
+    if _find_shaders_json(task_id) is not None:
+        return _build_tsx_skeleton_r3f_shader(task_id)
+    return _build_tsx_skeleton_r3f_basic(task_id)
+
+
+def _build_tsx_skeleton_r3f_basic(task_id: str) -> str:
+    """R3F 基本雛形 (shaderMaterial 非使用)。"""
     pascal = _task_id_to_pascal(task_id)
     slug = _task_slug(task_id)
     code = (
@@ -1575,6 +1684,82 @@ def _build_tsx_skeleton_r3f(task_id: str) -> str:
         "    <section className=\"relative h-[100vh] bg-extracted-001\">\n"
         "      <Canvas className=\"absolute inset-0\" dpr={[1, 2]}>\n"
         "        <ambientLight intensity={0.8} />\n"
+        "        <PASCALScene />\n"
+        "      </Canvas>\n"
+        "      {/* 要望反映 (DOM 側) */}\n"
+        "    </section>\n"
+        "  );\n"
+        "}\n"
+    )
+    return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
+
+
+def _build_tsx_skeleton_r3f_shader(task_id: str) -> str:
+    """R3F + shaderMaterial 雛形 (段階 2 / RSRC-WEBANIM-HARDCASE §1)。
+
+    recon が Spector.js で capture したシェーダを shaderMaterial に貼り込む。
+    GLSL 原文は雛形に直接埋め込まず、本棚ページ WebGL セクション + shaders.json
+    から AI が手動で貼り込む (GLSL の長さやエスケープ差異を吸収するため)。
+    """
+    pascal = _task_id_to_pascal(task_id)
+    slug = _task_slug(task_id)
+    code = (
+        "// src/components/SLUG/PASCAL.tsx\n"
+        "'use client';\n"
+        "\n"
+        "// recon が Spector.js で capture した GLSL は下記から貼り込む:\n"
+        "//   本棚ページ (.libs/storybook/SLUG/SLUG.md) の `## ...WebGL` セクション\n"
+        "//   全文は recon/site-1/webgl/shaders.json の programs[0].{vertexShader,fragmentShader}\n"
+        "\n"
+        "import { Canvas, useFrame } from '@react-three/fiber';\n"
+        "import { useMemo, useRef } from 'react';\n"
+        "import type { ShaderMaterial } from 'three';\n"
+        "\n"
+        "const VERTEX_SHADER = /* glsl */ `\n"
+        "// TODO: shaders.json の programs[0].vertexShader を貼り込む\n"
+        "void main() {\n"
+        "  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n"
+        "}\n"
+        "`;\n"
+        "\n"
+        "const FRAGMENT_SHADER = /* glsl */ `\n"
+        "// TODO: shaders.json の programs[0].fragmentShader を貼り込む\n"
+        "void main() {\n"
+        "  gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n"
+        "}\n"
+        "`;\n"
+        "\n"
+        "function PASCALScene() {\n"
+        "  const material = useRef<ShaderMaterial>(null);\n"
+        "  const uniforms = useMemo(\n"
+        "    () => ({\n"
+        "      u_time: { value: 0 },\n"
+        "      u_resolution: { value: [0, 0] as [number, number] },\n"
+        "    }),\n"
+        "    [],\n"
+        "  );\n"
+        "  useFrame(({ clock, size }) => {\n"
+        "    if (!material.current) return;\n"
+        "    material.current.uniforms.u_time.value = clock.elapsedTime;\n"
+        "    material.current.uniforms.u_resolution.value = [size.width, size.height];\n"
+        "  });\n"
+        "  return (\n"
+        "    <mesh>\n"
+        "      <planeGeometry args={[2, 2]} />\n"
+        "      <shaderMaterial\n"
+        "        ref={material}\n"
+        "        vertexShader={VERTEX_SHADER}\n"
+        "        fragmentShader={FRAGMENT_SHADER}\n"
+        "        uniforms={uniforms}\n"
+        "      />\n"
+        "    </mesh>\n"
+        "  );\n"
+        "}\n"
+        "\n"
+        "export function PASCAL() {\n"
+        "  return (\n"
+        "    <section className=\"relative h-[100vh] bg-extracted-001\">\n"
+        "      <Canvas className=\"absolute inset-0\" dpr={[1, 2]}>\n"
         "        <PASCALScene />\n"
         "      </Canvas>\n"
         "      {/* 要望反映 (DOM 側) */}\n"

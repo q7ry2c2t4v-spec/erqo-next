@@ -21,7 +21,8 @@ core/          ← コアモジュール（全スクリプトの土台）
 ├── coding_rules_hook.py   ← PreToolUse Hook 用、編集前に適用ルールを stderr 通知
 ├── clone.py               ← /codi レイアウトタスク用 7 サブステップ実行
 ├── clone_node/            ← Node + Playwright サブプロジェクト（隔離）
-│   └── recon.mjs          ←   参考サイト取材（スクショ + DOM/CSS 取得）
+│   ├── recon.mjs          ←   参考サイト取材（スクショ + DOM/CSS 取得 + WebGL 判定）
+│   └── spector.mjs        ←   Spector.js で WebGL シェーダ 1 フレーム capture（段階 2）
 ├── session.py
 ├── state.py
 ├── load.py
@@ -201,7 +202,19 @@ RSRC-WEBANIM-{CAPTURE,REPLAY,HARDCASE} の基本セットを `clone.py` + `recon
 - **差分検証**: `cmd_baseline` 末尾で `_compare_recon_vs_baseline()` が `diff.mjs` (pixelmatch + pngjs) を呼び、元サイト vs 再現の差分率を `.libs/storybook/<slug>/diff/` に保存する。`record.py` が features ページに「再現度検証」セクションとして自動転記
 - **一元定数**: `constants.py` の `ANIM_LIB_PATTERNS_FILENAME` / `SCROLL_SAMPLING_STEPS` / `SCROLL_TRACKED_SELECTORS` / `RECON_ASSETS_DIR_NAME` / `DIFF_*` が SSOT
 
-段階 2〜5 (Spector.js / 時間偽装 / rrweb / Vision LLM / VRT 差分自動修正ループ) は別セッションで段階投入する。設計は `.libs/research/webanim/` の 3 ページに固定済み。
+#### アニメーション取材・再現の組み込み (段階 2 導入済 — WebGL 完全取材)
+
+RSRC-WEBANIM-HARDCASE §1 の WebGL 取材を `clone.py` + `recon.mjs` + 新規 `spector.mjs` に組み込んだ:
+
+- **recon 拡張 (WebGL 判定)**: `collectReport` 内で `canvas.getContext('webgl'|'webgl2')` を走査して `report.webgl = { hasWebGL, canvasCount }` を返す。副作用なし (既存コンテキストのキャッシュ返しのみ)
+- **WebGL 標準 API での抽出**: `recon.mjs` が `hasWebGL=true` のときだけ `core/clone_node/spector.mjs` の `captureWebGLShaders(page)` を呼ぶ。実装は **WebGL 標準 API (`getAttachedShaders` + `getShaderSource`)** で `CURRENT_PROGRAM` の shader 本文を直接取得する方式 (Spector.js を組み込んで検証した結果、Spector の capture は描画フレームの call 列のみで `compileShader`/`shaderSource` は含まれず GLSL 抽出に使えなかったため標準 API に切り替えた。ファイル名は `spector.mjs` のまま歴史的名称として残置)
+- **出力**: `recon/site-<i>/webgl/shaders.json` に `{capturedAt, url, canvases, programs, commandCount, note}` 形式で保存。`programs[i] = {id, canvasIndex, vertexShader, fragmentShader}`。失敗しても recon 全体は止めない (HARDCASE §1「9 割再現」方針)
+- **新セクション 1 つ**: `_format_webgl_section()` が本棚ページに「WebGL / シェーダ取材」セクション (programs 数 + primary canvas 寸法 + 先頭 3 program の vertex/fragment 抜粋) を生成
+- **build 雛形分岐 (r3f)**: `_build_tsx_skeleton_r3f()` が `_find_shaders_json()` の結果で分岐し、shaders.json ありなら `shaderMaterial` + `uniforms` (u_time / u_resolution) 版雛形、なしなら従来の `meshBasicMaterial` 版を返す。GLSL 原文は雛形に直接埋め込まず本棚ページ + `shaders.json` から AI が貼り込む
+- **一元定数**: `constants.py` の `WEBGL_OUTPUT_DIR_NAME = "webgl"` / `WEBGL_SHADERS_FILENAME = "shaders.json"`。`spector.mjs` は純 WebGL 標準 API 実装で CDN 依存なし
+- **制約**: `CURRENT_PROGRAM` ベースなので描画ループの最終 program のみ抽出される (複数 program を使うパイプラインではメイン program を逃す可能性あり)。全 program 履歴が必要な場合は段階 4 以降で `addInitScript` + WebGL API hook 方式への拡張を検討
+
+段階 3〜5 (時間偽装 / rrweb / Vision LLM / VRT 差分自動修正ループ) は別セッションで段階投入する。設計は `.libs/research/webanim/` の 3 ページに固定済み。
 
 ### clone_node/diff.mjs — 元サイト vs 再現の差分検証 (Node)
 
@@ -288,7 +301,7 @@ stage_ops.py ← /wrap ステップ 5-4
 write_guard.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
 coding_rules.py ← 01-workflow.md 本元フロー / skills/codi/SKILL.md ステップ2 / coding_rules_hook.py
 coding_rules_hook.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
-clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ2-B (build/assemble/baseline) → clone_node/recon.mjs, clone_node/baseline.mjs, clone_node/diff.mjs, clone_node/anim_lib_patterns.json
+clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ2-B (build/assemble/baseline) → clone_node/recon.mjs, clone_node/baseline.mjs, clone_node/diff.mjs, clone_node/spector.mjs, clone_node/anim_lib_patterns.json
 install.py ← dev.py（ヘルパー再利用） / specs/templates/ から QA 設定を配布
 fb/handler.py ← /fb
 ```

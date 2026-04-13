@@ -285,6 +285,17 @@ DIFF_PIXELMATCH_THRESHOLD = 0.1
 # 「再現度不足」と features ページに記録する上限差分率
 DIFF_MAX_MISMATCH_RATIO = 0.05
 
+# --- 段階 2: WebGL / シェーダ取材 (Spector.js 組み込み) ---
+# RSRC-WEBANIM-HARDCASE §1 "WebGL 完全取材 — Spector.js 統合" に準拠。
+# recon.mjs が collectReport 内で hasWebGL を判定し、true のときだけ
+# core/clone_node/spector.mjs の captureWebGLShaders を呼んで
+# programs[*].shaders.{vertex,fragment}.source を shaders.json に保存する。
+# capture に失敗しても recon 全体は止めない (HARDCASE §1 の「9 割再現」方針)。
+
+WEBGL_OUTPUT_DIR_NAME = "webgl"
+WEBGL_SHADERS_FILENAME = "shaders.json"
+
+
 # --- コーディングルール判定 (coding_rules.py) ---
 # ファイル拡張子からカテゴリを機械判定するための定数。
 # AI の自己判断を排除する (specs/08-responsibility.md)。
