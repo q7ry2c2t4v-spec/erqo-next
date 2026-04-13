@@ -39,7 +39,7 @@ import { chromium } from 'playwright';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { captureWebGLShaders } from './spector.mjs';
+import { captureWebGLShaders, installWebGLProgramTracking } from './spector.mjs';
 import { installTimeVirtualization, warmupVirtualTime } from './time-virtualize.mjs';
 import { installRrwebRecording, startRrwebRecording, collectRrwebEvents } from './rrweb-record.mjs';
 
@@ -452,6 +452,20 @@ async function main() {
         viewport: { width: vp.width, height: vp.height },
       });
       const page = await context.newPage();
+
+      // --- WebGL program 履歴追跡 (段階 4: RSRC-WEBANIM-HARDCASE §1 拡張) ---
+      // WebGLRenderingContext / WebGL2RenderingContext の useProgram を addInitScript で
+      // hook し、サイトが bind した全 program への参照を追跡する。
+      // capture 時 (screenshot 後) に getAttachedShaders + getShaderSource で GLSL を抽出。
+      // 失敗しても recon 全体は止めない (HARDCASE §1「9 割再現」方針)。
+      if (vpIdx === 0) {
+        try {
+          await installWebGLProgramTracking(page);
+          console.log('recon-webgl tracking installed (useProgram hook)');
+        } catch (e) {
+          console.error(`recon-warn WebGL hook install 失敗: ${e.message}`);
+        }
+      }
 
       // --- 仮想時計注入 (段階 3: RSRC-WEBANIM-HARDCASE §2) ---
       // deterministic=true なら page.addInitScript で仮想時計を入れる。
