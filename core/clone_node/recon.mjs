@@ -8,13 +8,15 @@
 //   node core/clone_node/recon.mjs <url> <output-dir> \
 //     [--viewport name:WxH] [--viewport name:WxH] ... \
 //     [--scroll-steps N] [--scroll-selectors sel1,sel2,...] \
-//     [--assets-dir PATH]
+//     [--assets-dir PATH] \
+//     [--deterministic] [--deterministic-step MS] [--deterministic-warmup FRAMES]
 //
 // 出力:
 //   <output-dir>/screenshot-<name>.png
 //   <output-dir>/recon-<name>.json
-//   <output-dir>/scroll-samples.json           (desktop viewport のみ)
-//   <assets-dir>/*.json / *.riv                (Lottie/Rive 検出時)
+//   <output-dir>/scroll-samples.json                (desktop viewport のみ)
+//   <assets-dir>/lottie-*.json / rive-*.riv         (Lottie/Rive 検出時)
+//   <assets-dir>/video-*.mp4 / .webm / .ogg         (背景動画 検出時、段階 3)
 //
 // 取材項目 (page.evaluate 内で収集):
 //   1. DOM  — セマンティックツリーの概要 (tagName / role / id / class / テキスト)
@@ -36,6 +38,14 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { captureWebGLShaders } from './spector.mjs';
+import { installTimeVirtualization, warmupVirtualTime } from './time-virtualize.mjs';
+
+// 段階 3 の時間偽装デフォルト値。core/constants.py の DETERMINISTIC_STEP_MS /
+// DETERMINISTIC_WARMUP_FRAMES と同期させること (SSOT は constants.py)。
+// 現時点は recon.mjs 単独起動時のフォールバック用。将来 clone.py から CLI 引数で
+// 上書きする仕様を足したら削除する。
+const DETERMINISTIC_STEP_MS_DEFAULT = 16;
+const DETERMINISTIC_WARMUP_FRAMES_DEFAULT = 60;
 
 // --- 引数パース ---
 
@@ -55,6 +65,9 @@ function parseArgs(argv) {
   let scrollSteps = 0;
   let scrollSelectors = [];
   let assetsDir = null;
+  let deterministic = false;
+  let deterministicStepMs = DETERMINISTIC_STEP_MS_DEFAULT;
+  let deterministicWarmupFrames = DETERMINISTIC_WARMUP_FRAMES_DEFAULT;
 
   for (let i = 2; i < args.length; i++) {
     if (args[i] === '--viewport' && i + 1 < args.length) {
@@ -75,6 +88,14 @@ function parseArgs(argv) {
       scrollSelectors = args[++i].split(',').map(s => s.trim()).filter(Boolean);
     } else if (args[i] === '--assets-dir' && i + 1 < args.length) {
       assetsDir = resolve(args[++i]);
+    } else if (args[i] === '--deterministic') {
+      deterministic = true;
+    } else if (args[i] === '--deterministic-step' && i + 1 < args.length) {
+      const v = parseInt(args[++i], 10);
+      if (!Number.isNaN(v) && v > 0) deterministicStepMs = v;
+    } else if (args[i] === '--deterministic-warmup' && i + 1 < args.length) {
+      const v = parseInt(args[++i], 10);
+      if (!Number.isNaN(v) && v >= 0) deterministicWarmupFrames = v;
     }
   }
 
@@ -83,7 +104,10 @@ function parseArgs(argv) {
     viewports.push({ name: 'desktop', width: 1440, height: 900 });
   }
 
-  return { url, outputDir, viewports, scrollSteps, scrollSelectors, assetsDir };
+  return {
+    url, outputDir, viewports, scrollSteps, scrollSelectors, assetsDir,
+    deterministic, deterministicStepMs, deterministicWarmupFrames,
+  };
 }
 
 // --- 取材本体 (page.evaluate の中で走る) ---
@@ -368,11 +392,15 @@ async function collectScrollSamples({ steps, selectors }) {
 // --- Lottie / Rive 検出 (Node 側で response 監視) ---
 // RSRC-WEBANIM-CAPTURE §技術詳細 1 の補助 + §RSRC-WEBANIM-HARDCASE §5 "Lottie/Rive 検出"。
 
-const LOTTIE_RIVE_URL_REGEX = /\.(json|lottie|riv)(\?|$)/i;
+// 段階 1: json / lottie / riv  ← Lottie/Rive DL
+// 段階 3: mp4 / webm / ogg      ← 背景動画 DL (core/constants.py VIDEO_EXTENSIONS と同期)
+const RECON_ASSET_URL_REGEX = /\.(json|lottie|riv|mp4|webm|ogg)(\?|$)/i;
+const VIDEO_EXT_REGEX = /\.(mp4|webm|ogg)(\?|$)/i;
 const LOTTIE_JSON_MARKER_RE = /"v"\s*:\s*"[\d.]+"[\s\S]*?"layers"\s*:/;
 const RIVE_MAGIC = Buffer.from('RIVE');
 
 function classifyAsset(url, buf) {
+  if (VIDEO_EXT_REGEX.test(url)) return 'video';
   if (/\.riv(\?|$)/i.test(url)) return 'rive';
   if (buf.length >= 4 && buf.slice(0, 4).equals(RIVE_MAGIC)) return 'rive';
   if (/\.lottie(\?|$)/i.test(url)) return 'lottie';
@@ -389,6 +417,7 @@ async function main() {
   const {
     url, outputDir, viewports,
     scrollSteps, scrollSelectors, assetsDir,
+    deterministic, deterministicStepMs, deterministicWarmupFrames,
   } = parseArgs(process.argv);
 
   await mkdir(outputDir, { recursive: true });
@@ -414,19 +443,34 @@ async function main() {
       });
       const page = await context.newPage();
 
-      // --- Lottie / Rive の response 監視 (最初の viewport だけで十分) ---
+      // --- 仮想時計注入 (段階 3: RSRC-WEBANIM-HARDCASE §2) ---
+      // deterministic=true なら page.addInitScript で仮想時計を入れる。
+      // Web Worker / OffscreenCanvas の時計は patch 外 (time-virtualize.mjs の制約参照)。
+      if (deterministic) {
+        try {
+          await installTimeVirtualization(page);
+          console.log(
+            `recon-deterministic install step=${deterministicStepMs}ms ` +
+              `warmup=${deterministicWarmupFrames}frames`
+          );
+        } catch (e) {
+          console.error(`recon-warn 仮想時計注入失敗: ${e.message}`);
+        }
+      }
+
+      // --- Lottie / Rive / 背景動画 の response 監視 (最初の viewport だけで十分) ---
       const seenAssetUrls = new Set();
       if (assetsDir && vpIdx === 0) {
         page.on('response', async (res) => {
           const resUrl = res.url();
-          if (!LOTTIE_RIVE_URL_REGEX.test(resUrl)) return;
+          if (!RECON_ASSET_URL_REGEX.test(resUrl)) return;
           if (seenAssetUrls.has(resUrl)) return;
           seenAssetUrls.add(resUrl);
           try {
             const buf = await res.body();
             const kind = classifyAsset(resUrl, buf);
             if (!kind) return;
-            const extMatch = resUrl.match(/\.(json|lottie|riv)(\?|$)/i);
+            const extMatch = resUrl.match(RECON_ASSET_URL_REGEX);
             const ext = extMatch ? extMatch[1].toLowerCase() : 'bin';
             const hash = Math.abs([...resUrl].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 0))
               .toString(36).slice(0, 8);
@@ -443,15 +487,34 @@ async function main() {
         });
       }
 
+      // deterministic モードは全ての setTimeout を仮想時計に差し替えるため、
+      // 'networkidle' を待つと遅延ロードが発火せずタイムアウトする。
+      // DOM 構築完了 (domcontentloaded) → warmupVirtualTime で初期化を進める、の 2 段構え。
+      const gotoWaitUntil = deterministic ? 'domcontentloaded' : 'networkidle';
       try {
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 });
+        await page.goto(url, { waitUntil: gotoWaitUntil, timeout: 45000 });
       } catch (e) {
         // networkidle に行かないサイトもあるので load で妥協リトライ
         await page.goto(url, { waitUntil: 'load', timeout: 45000 });
       }
 
-      // アニメ開始直後も取れるよう少し待つ (1 秒)
-      await page.waitForTimeout(1000);
+      // 仮想時計ウォームアップ (段階 3): 初期 setTimeout / rAF チェーンを進めて
+      // 「60 フレーム経過相当」の DOM 状態にしてから取材する。
+      if (deterministic && vpIdx === 0) {
+        try {
+          await warmupVirtualTime(page, deterministicWarmupFrames, deterministicStepMs);
+          console.log(
+            `recon-deterministic warmup-done ` +
+              `frames=${deterministicWarmupFrames} stepMs=${deterministicStepMs}`
+          );
+        } catch (e) {
+          console.error(`recon-warn 仮想時計 warmup 失敗: ${e.message}`);
+        }
+      }
+
+      // アニメ開始直後も取れるよう少し待つ。
+      // 通常モードは 1 秒 / deterministic モードは warmup 済みなので 200ms に短縮。
+      await page.waitForTimeout(deterministic ? 200 : 1000);
 
       const screenshotPath = join(outputDir, `screenshot-${vp.name}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: true });

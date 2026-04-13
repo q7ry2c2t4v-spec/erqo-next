@@ -21,8 +21,11 @@ core/          ← コアモジュール（全スクリプトの土台）
 ├── coding_rules_hook.py   ← PreToolUse Hook 用、編集前に適用ルールを stderr 通知
 ├── clone.py               ← /codi レイアウトタスク用 7 サブステップ実行
 ├── clone_node/            ← Node + Playwright サブプロジェクト（隔離）
-│   ├── recon.mjs          ←   参考サイト取材（スクショ + DOM/CSS 取得 + WebGL 判定）
-│   └── spector.mjs        ←   Spector.js で WebGL シェーダ 1 フレーム capture（段階 2）
+│   ├── recon.mjs          ←   参考サイト取材（スクショ + DOM/CSS + WebGL 判定 + 動画 DL + 時間偽装）
+│   ├── baseline.mjs       ←   VRT 基準スクショ（pixel-perfect 撮影）
+│   ├── diff.mjs           ←   元サイト vs 再現の差分検証（pixelmatch + pngjs）
+│   ├── spector.mjs        ←   WebGL 標準 API で CURRENT_PROGRAM のシェーダ抽出（段階 2）
+│   └── time-virtualize.mjs ←   仮想時計を addInitScript で注入（段階 3）
 ├── session.py
 ├── state.py
 ├── load.py
@@ -214,7 +217,19 @@ RSRC-WEBANIM-HARDCASE §1 の WebGL 取材を `clone.py` + `recon.mjs` + 新規 
 - **一元定数**: `constants.py` の `WEBGL_OUTPUT_DIR_NAME = "webgl"` / `WEBGL_SHADERS_FILENAME = "shaders.json"`。`spector.mjs` は純 WebGL 標準 API 実装で CDN 依存なし
 - **制約**: `CURRENT_PROGRAM` ベースなので描画ループの最終 program のみ抽出される (複数 program を使うパイプラインではメイン program を逃す可能性あり)。全 program 履歴が必要な場合は段階 4 以降で `addInitScript` + WebGL API hook 方式への拡張を検討
 
-段階 3〜5 (時間偽装 / rrweb / Vision LLM / VRT 差分自動修正ループ) は別セッションで段階投入する。設計は `.libs/research/webanim/` の 3 ページに固定済み。
+#### アニメーション取材・再現の組み込み (段階 3 導入済 — 背景動画 + 時間偽装)
+
+RSRC-WEBANIM-HARDCASE §2 "rAF 時間偽装法 — 決定的フレーム取材" と §5 の動画拡張を `clone.py` + `recon.mjs` + 新規 `time-virtualize.mjs` に組み込んだ:
+
+- **仮想時計モジュール**: `core/clone_node/time-virtualize.mjs` が `installTimeVirtualization(page)` + `warmupVirtualTime(page, steps, stepMs)` を export する。`addInitScript` で `Date` / `performance.now` / `requestAnimationFrame` / `setTimeout` / `setInterval` を monkey-patch し、外部から `window.__step__(dtMs)` で仮想時計を進める。CSS animations の `currentTime` と `<video>.currentTime` も同期する
+- **`--deterministic` フラグ**: `recon.mjs` がこれを受けると page 生成直後に仮想時計を注入、goto 後に `DETERMINISTIC_WARMUP_FRAMES`（既定 60）× `DETERMINISTIC_STEP_MS`（既定 16ms）で 1 秒分進めてから取材する。rAF 手書きアニメや初期化 setTimeout に依存するサイトで決定的なフレーム取材が可能
+- **背景動画 DL 拡張**: recon.mjs の `RECON_ASSET_URL_REGEX` に `.mp4 / .webm / .ogg` を追加し、`classifyAsset` が `kind: "video"` を判定。`assets/manifest.json` の `assets[]` に video エントリが並ぶ
+- **新セクション 1 つ**: `_format_video_section()` が本棚ページに「背景動画 / メディア取材」セクション (`<video>` 要素の URL + 自動 DL 済み動画ファイル一覧) を生成
+- **build 雛形分岐 (video)**: `_build_tsx_skeleton_video()` が `<video autoplay muted loop playsInline>` + `object-cover` + `/public/videos/<slug>/` 配置の背景動画雛形を出す。`_TSX_SKELETON_BY_LIB["video"]` で採用ライブラリ `video` のとき呼ばれる (input.md で明示指定)
+- **一元定数**: `constants.py` の `VIDEO_EXTENSIONS` / `DETERMINISTIC_STEP_MS` / `DETERMINISTIC_WARMUP_FRAMES`
+- **制約**: Web Worker / OffscreenCanvas の時計は patch 外。`Promise` / `queueMicrotask` は触らないためイベントループ整合性は保つ。仮想時計を入れると setTimeout 依存の初期化が止まるため `warmupVirtualTime` 呼び出しは必須 (recon.mjs が自動で実行)
+
+段階 4〜5 (Vision LLM フォールバック / VRT 差分自動修正ループ) は別セッションで段階投入する。設計は `.libs/research/webanim/` の 3 ページに固定済み。
 
 ### clone_node/diff.mjs — 元サイト vs 再現の差分検証 (Node)
 
@@ -301,7 +316,7 @@ stage_ops.py ← /wrap ステップ 5-4
 write_guard.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
 coding_rules.py ← 01-workflow.md 本元フロー / skills/codi/SKILL.md ステップ2 / coding_rules_hook.py
 coding_rules_hook.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
-clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ2-B (build/assemble/baseline) → clone_node/recon.mjs, clone_node/baseline.mjs, clone_node/diff.mjs, clone_node/spector.mjs, clone_node/anim_lib_patterns.json
+clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ2-B (build/assemble/baseline) → clone_node/recon.mjs, clone_node/baseline.mjs, clone_node/diff.mjs, clone_node/spector.mjs, clone_node/time-virtualize.mjs, clone_node/anim_lib_patterns.json
 install.py ← dev.py（ヘルパー再利用） / specs/templates/ から QA 設定を配布
 fb/handler.py ← /fb
 ```

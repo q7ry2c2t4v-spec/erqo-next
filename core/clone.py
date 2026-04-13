@@ -105,7 +105,7 @@ def _build_input_template(task_id: str) -> str:
         "\n"
         f"## {task_id}.採用ライブラリ — 採用ライブラリ指定 (任意)\n"
         "- (空欄なら recon 検出結果から自動選択)\n"
-        "<!-- 指定する場合は gsap / motion / lenis / r3f / lottie / pure-css のいずれかを書く -->\n"
+        "<!-- 指定する場合は gsap / motion / lenis / r3f / lottie / video / pure-css のいずれかを書く -->\n"
         "\n"
         f"## {task_id}.要望 — 要望\n"
         "- \n"
@@ -701,7 +701,7 @@ def _format_libraries_section(task_id: str, sites: list) -> list[str]:
     lines = [f"## {task_id}.採用ライブラリ — 採用ライブラリ", ""]
     lines.append(
         "> recon が検出したアニメーション / スクロール / スライダーライブラリ。"
-        "build が本セクションを読んで雛形を分岐する (gsap / motion / lenis / r3f / lottie / pure-css)。"
+        "build が本セクションを読んで雛形を分岐する (gsap / motion / lenis / r3f / lottie / video / pure-css)。"
     )
     lines.append(
         "> ユーザー指定がある場合は input.md の `採用ライブラリ` セクションで上書きできる。"
@@ -958,6 +958,83 @@ def _format_webgl_section(task_id: str, sites: list) -> list[str]:
     return lines
 
 
+def _format_video_section(task_id: str, sites: list) -> list[str]:
+    """背景動画 / メディア取材セクション — 段階 3 で追加。
+
+    RSRC-WEBANIM-HARDCASE の Lottie/Rive 延長 + §2 時間偽装と組み合わせる背景動画対応。
+    recon.mjs の collectReport が返す `report.videos` (currentSrc / src / poster) と、
+    assets/manifest.json の `kind="video"` アセット DL 結果を集約して本棚ページに書く。
+    build は本セクション + input.md `採用ライブラリ: video` を見て video 雛形を出す。
+    """
+    lines = [f"## {task_id}.背景動画 — 背景動画 / メディア取材 (段階 3)", ""]
+    lines.append(
+        "> recon が取得した `<video>` 要素 URL + 自動 DL された動画ファイル。"
+        "input.md の `採用ライブラリ` に `video` と書くと build が "
+        "`<video autoplay muted loop playsinline>` + `object-fit: cover` 雛形を出す。"
+    )
+    lines.append("")
+
+    any_found = False
+
+    # --- 1. recon JSON の videos 配列 (DOM から拾った <video> 情報) ---
+    for site in sites:
+        meta = site.get("meta") or {}
+        idx = meta.get("index", "?")
+        seen_src: set[str] = set()
+        unique_videos: list[dict] = []
+        for vp in (site.get("viewports") or {}).values():
+            for v in vp.get("videos") or []:
+                key = v.get("currentSrc") or v.get("src") or ""
+                if key in seen_src:
+                    continue
+                seen_src.add(key)
+                unique_videos.append(v)
+        if not unique_videos:
+            continue
+        any_found = True
+        lines.append(f"### site-{idx} `<video>` 要素 ({len(unique_videos)} 件)")
+        lines.append("")
+        for i, v in enumerate(unique_videos[:5], 1):
+            src = v.get("currentSrc") or v.get("src") or "(src なし)"
+            lines.append(f"- **#{i}**: `{src}`")
+            poster = v.get("poster")
+            if poster:
+                lines.append(f"  - poster: `{poster}`")
+        lines.append("")
+
+    # --- 2. manifest.json から kind="video" のアセットを拾う ---
+    for site in sites:
+        meta = site.get("meta") or {}
+        idx = meta.get("index", "?")
+        site_path: Path | None = site.get("path")
+        if site_path is None:
+            continue
+        manifest_path = site_path / RECON_ASSETS_DIR_NAME / "manifest.json"
+        if not manifest_path.exists():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        video_assets = [a for a in (manifest.get("assets") or []) if a.get("kind") == "video"]
+        if not video_assets:
+            continue
+        any_found = True
+        lines.append(f"### site-{idx} 自動 DL された動画ファイル ({len(video_assets)} 件)")
+        lines.append("")
+        for asset in video_assets[:5]:
+            file_name = asset.get("fileName", "?")
+            size = asset.get("size", "?")
+            rel = f"recon/site-{idx}/{RECON_ASSETS_DIR_NAME}/{file_name}"
+            lines.append(f"- `{rel}` ({size} bytes) ← {asset.get('url', '?')}")
+        lines.append("")
+
+    if not any_found:
+        lines.append("(背景動画 / `<video>` 要素 未検出)")
+        lines.append("")
+    return lines
+
+
 def _build_bookshelf_page(
     task_id: str, input_meta: dict, recon_data: dict
 ) -> str:
@@ -1042,6 +1119,7 @@ def _build_bookshelf_page(
         lines.extend(_format_scroll_mapping_section(task_id, sites))
         lines.extend(_format_assets_section(task_id, sites))
         lines.extend(_format_webgl_section(task_id, sites))
+        lines.extend(_format_video_section(task_id, sites))
 
     # text-only モード
     elif mode == "text-only":
@@ -1799,6 +1877,49 @@ def _build_tsx_skeleton_lottie(task_id: str) -> str:
     return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
 
 
+def _build_tsx_skeleton_video(task_id: str) -> str:
+    """背景動画雛形 — 段階 3 で追加。
+
+    recon が .mp4 / .webm / .ogg を自動 DL し、本棚ページの「背景動画」セクションに
+    DL ファイル一覧が載る。雛形は絶対配置 + object-cover + autoplay muted loop
+    playsinline のブラウザ許容パターンで背景動画を再生する。
+    実パスは入力元 `/public/videos/<slug>/` への配置を想定。DL 失敗時は元サイト
+    URL を直指定する (CORS / hotlink は呼出側で注意)。
+    """
+    pascal = _task_id_to_pascal(task_id)
+    slug = _task_slug(task_id)
+    code = (
+        "// src/components/SLUG/PASCAL.tsx\n"
+        "'use client';\n"
+        "\n"
+        "// 本棚ページの「背景動画」セクションで recon 出力 / 自動 DL パスを確認すること。\n"
+        "// autoplay のためには muted + playsInline が必須 (ブラウザの自動再生ポリシー)。\n"
+        "\n"
+        "export function PASCAL() {\n"
+        "  return (\n"
+        "    <section className=\"relative h-screen w-full overflow-hidden\">\n"
+        "      <video\n"
+        "        className=\"absolute inset-0 h-full w-full object-cover\"\n"
+        "        src=\"/videos/SLUG/background.mp4\"\n"
+        "        poster=\"/videos/SLUG/poster.jpg\"\n"
+        "        autoPlay\n"
+        "        muted\n"
+        "        loop\n"
+        "        playsInline\n"
+        "        preload=\"auto\"\n"
+        "        aria-hidden\n"
+        "      />\n"
+        "      <div className=\"absolute inset-0 bg-black/30\" aria-hidden />\n"
+        "      <div className=\"relative z-10 flex h-full flex-col items-center justify-center text-extracted-primary\">\n"
+        "        {/* 要望反映: 見出し / CTA / スクロールヒントなど */}\n"
+        "      </div>\n"
+        "    </section>\n"
+        "  );\n"
+        "}\n"
+    )
+    return "```tsx\n" + code.replace("SLUG", slug).replace("PASCAL", pascal) + "```"
+
+
 # ライブラリ名 → 雛形関数 のマップ (selectPriority と同じキー体系)
 _TSX_SKELETON_BY_LIB = {
     "gsap": _build_tsx_skeleton_gsap,
@@ -1809,6 +1930,7 @@ _TSX_SKELETON_BY_LIB = {
     "three": _build_tsx_skeleton_r3f,
     "lottie": _build_tsx_skeleton_lottie,
     "rive": _build_tsx_skeleton_lottie,          # Rive は lottie と同じ位置付け (別ライブラリ推奨)
+    "video": _build_tsx_skeleton_video,          # 段階 3: 背景動画
     "pure-css": _build_tsx_skeleton,
 }
 

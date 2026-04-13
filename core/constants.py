@@ -295,6 +295,19 @@ DIFF_MAX_MISMATCH_RATIO = 0.05
 WEBGL_OUTPUT_DIR_NAME = "webgl"
 WEBGL_SHADERS_FILENAME = "shaders.json"
 
+# --- 段階 3: 背景動画アセット DL + 時間偽装 (決定的 recon) ---
+# RSRC-WEBANIM-HARDCASE §2 "rAF 時間偽装法" / §5 "Lottie/Rive" の動画拡張に準拠。
+# recon.mjs の --deterministic で core/clone_node/time-virtualize.mjs を addInitScript し、
+# Date / performance.now / requestAnimationFrame / setTimeout / setInterval を仮想時計に
+# 差し替えて決定的なフレーム取材を行う。背景動画は page.on('response') で .mp4/.webm/.ogg
+# を自動 DL し、clone.py の _format_video_section が本棚ページに埋める。
+
+VIDEO_EXTENSIONS = (".mp4", ".webm", ".ogg")
+# 仮想時計の 1 ステップ (ms)。60fps 相当で起動後の初期アニメーションを進める。
+DETERMINISTIC_STEP_MS = 16
+# 起動後にウォームアップ目的で進めるフレーム数 (= 約 1 秒分)。
+DETERMINISTIC_WARMUP_FRAMES = 60
+
 
 # --- コーディングルール判定 (coding_rules.py) ---
 # ファイル拡張子からカテゴリを機械判定するための定数。
