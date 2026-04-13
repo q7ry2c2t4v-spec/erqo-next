@@ -78,8 +78,9 @@
 ├── specs/     ← OS 仕様書（このファイル群）
 ├── core/      ← コアモジュール（パス解決・インデックス・状態管理等）
 ├── skills/    ← 共通スキル定義（dev.py が .claude/skills/ にコピー）
-└── stacks/    ← variant 別装備（段階 2 以降）
-    └── nextjs/   ← プル子専用（skills/layo, docs/, templates/, starter/, specs/coding/l3-nextjs.md）
+└── stacks/    ← variant 別装備
+    ├── nextjs/   ← プル子専用（skills/layo, docs/, templates/, starter/, specs/coding/l3-nextjs.md）
+    └── generic/  ← プタ子専用（skills/ 空 + starter/ 案内 README のみ。最小構成）
 ```
 
 本元リポジトリではこれらが**ルート直下**にあり、システム調整のために**直接編集する**。

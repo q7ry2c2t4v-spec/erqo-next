@@ -20,7 +20,13 @@ if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8
 if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-from paths import NXT_ROOT, IS_SOURCE, STACK_NEXTJS_SKILLS_DIR, TEMPLATES_DIR
+from paths import (
+    IS_SOURCE,
+    NXT_ROOT,
+    STACK_GENERIC_SKILLS_DIR,
+    STACK_NEXTJS_SKILLS_DIR,
+    TEMPLATES_DIR,
+)
 from constants import (
     LIBS_SHELVES,
     DEFAULT_GITIGNORE_LINES,
@@ -48,6 +54,7 @@ from constants import (
     VARIANT_GENERIC,
     VARIANT_JSON_KEY,
     VARIANT_NEXTJS,
+    VARIANTS,
 )
 from feedback import init_error_handling
 from variant import read_variant, write_variant
@@ -306,10 +313,16 @@ def _prompt_variant() -> str:
         print("  エラー: 1 か 2 を入力してください。")
 
 
-def setup_variant(project_root: Path, update_mode: bool) -> bool:
+def setup_variant(
+    project_root: Path,
+    update_mode: bool,
+    forced_value: str | None = None,
+) -> bool:
     """variant.json を作成または migrate する。
 
     - 既に印がある: 触らない (冪等)
+    - forced_value 指定: 対話/後方互換ロジックをスキップしてそれを書く
+      (bootstrap.py から `--variant=XXX` で渡される)
     - 新規インストール (update_mode=False) + 印なし: 対話で選ばせる
     - アップデート (update_mode=True) + 印なし: VARIANT_DEFAULT を書く
       (既存プル子の後方互換マイグレーション)
@@ -325,7 +338,10 @@ def setup_variant(project_root: Path, update_mode: bool) -> bool:
             print(f"  {VARIANT_FILE_NAME}: 既存 (読み込み失敗でスキップ)")
         return False
 
-    if update_mode:
+    if forced_value is not None:
+        value = forced_value
+        print(f"  {VARIANT_FILE_NAME}: 引数指定 → {value} として登録")
+    elif update_mode:
         value = VARIANT_DEFAULT
         print(
             f"  {VARIANT_FILE_NAME}: 印なし → {VARIANT_DEFAULT} として登録"
@@ -337,6 +353,28 @@ def setup_variant(project_root: Path, update_mode: bool) -> bool:
     write_variant(value)
     print(f"  {VARIANT_FILE_NAME}: {value} として保存")
     return True
+
+
+def _parse_variant_arg(argv: list[str]) -> str | None:
+    """sys.argv から `--variant=nextjs|generic` を取り出す。
+
+    不正値 (VARIANTS に含まれない) の場合は sys.exit(2) でエラー終了する
+    (L1.5 責務境界でバリデーション: CLI 引数は外部入力)。
+    指定がなければ None を返す (対話 / 後方互換ロジックに委ねる)。
+    """
+    for arg in argv:
+        if not arg.startswith(VARIANT_ARG_PREFIX):
+            continue
+        value = arg[len(VARIANT_ARG_PREFIX):].strip()
+        if value not in VARIANTS:
+            print(
+                f"エラー: {VARIANT_ARG_PREFIX} の値は {VARIANTS} のいずれか "
+                f"(受け取った値: {value!r})",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        return value
+    return None
 
 
 def setup_permission_defaults(project_root: Path) -> bool:
@@ -417,10 +455,14 @@ def _read_skill_variant(skill_md_path: Path) -> str:
 
 
 # variant → stacks/<variant>/skills/ のマッピング
-# 段階 3 で VARIANT_GENERIC: STACK_GENERIC_SKILLS_DIR を追加する想定。
+# _scan_skills() が src_root.exists() ガードで安全に走査する (空ディレクトリでも OK)。
 _STACK_SKILLS_DIRS: dict[str, Path] = {
     VARIANT_NEXTJS: STACK_NEXTJS_SKILLS_DIR,
+    VARIANT_GENERIC: STACK_GENERIC_SKILLS_DIR,
 }
+
+# --- CLI 引数キー (bootstrap.py から install.py に variant を伝達する) ---
+VARIANT_ARG_PREFIX = "--variant="
 
 
 def _scan_skills() -> list[tuple[str, Path]]:
@@ -675,6 +717,7 @@ def main() -> None:
         sys.exit(1)
 
     update_mode = "--update" in sys.argv
+    forced_variant = _parse_variant_arg(sys.argv[1:])
     project_root = NXT_ROOT.parent
 
     mode = "アップデート" if update_mode else "インストール"
@@ -693,7 +736,7 @@ def main() -> None:
 
     # 2.7. variant (プル子 / プタ子) 選択 / マイグレーション
     #      スキルコピー前に書き込む (setup_skills 内の variant フィルタが印を読むため)
-    setup_variant(project_root, update_mode)
+    setup_variant(project_root, update_mode, forced_value=forced_variant)
 
     # 3. スキルコピー
     setup_skills(project_root, update_mode)

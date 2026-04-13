@@ -36,16 +36,19 @@ core/          ← コアモジュール（全スクリプトの土台）
 skills/        ← 共通スキル定義（プル子・プタ子両対応分）
 └── fb/handler.py
 
-stacks/        ← variant 別装備 (段階 2 導入)
-└── nextjs/        ← プル子専用装備
-    ├── skills/    ← プル子限定スキル (layo)
-    │   └── layo/
-    ├── docs/      ← デザインリファレンス (Apple HIG / shadcn / Tailwind / M3 / Motion / Three.js)
-    ├── templates/ ← QA 設定テンプレート (eslint / playwright / lighthouse)
-    ├── starter/   ← Next.js プロジェクト初期化雛形
-    └── specs/
-        └── coding/
-            └── l3-nextjs.md  ← Next.js L3 規約
+stacks/        ← variant 別装備
+├── nextjs/        ← プル子専用装備
+│   ├── skills/    ← プル子限定スキル (layo)
+│   │   └── layo/
+│   ├── docs/      ← デザインリファレンス (Apple HIG / shadcn / Tailwind / M3 / Motion / Three.js)
+│   ├── templates/ ← QA 設定テンプレート (eslint / playwright / lighthouse)
+│   ├── starter/   ← Next.js プロジェクト初期化雛形
+│   └── specs/
+│       └── coding/
+│           └── l3-nextjs.md  ← Next.js L3 規約
+└── generic/       ← プタ子専用装備 (最小構成、段階 3 導入)
+    ├── skills/    ← プタ子限定スキル置き場 (現状は空、将来用)
+    └── starter/   ← プタ子向け案内 README.md のみ
 ```
 
 ## 編集ルール
@@ -72,6 +75,9 @@ stacks/        ← variant 別装備 (段階 2 導入)
 | `TEMPLATES_DIR` | QA 設定テンプレートのパス (`stacks/nextjs/templates/`、同上) |
 | `STACK_NEXTJS_DIR` | Next.js 装備ルート (`stacks/nextjs/`) |
 | `STACK_NEXTJS_SKILLS_DIR` | `stacks/nextjs/skills/` (プル子限定スキル) |
+| `STACK_GENERIC_DIR` | プタ子装備ルート (`stacks/generic/`、段階 3 導入) |
+| `STACK_GENERIC_SKILLS_DIR` | `stacks/generic/skills/` (プタ子限定スキル、現状は空) |
+| `STACK_GENERIC_STARTER_DIR` | `stacks/generic/starter/` (プタ子向け案内 README のみ) |
 | `CODING_L3_NEXTJS_FILE` | `stacks/nextjs/specs/coding/l3-nextjs.md` (段階 2 で stacks 配下に移動) |
 | `VARIANT_FILE` | `.claude/state/variant.json` のパス (プル子 / プタ子 の印) |
 
@@ -134,8 +140,21 @@ stacks/        ← variant 別装備 (段階 2 導入)
 |---|---|
 | `python core/install.py` | 新規インストール (Hook → permission → variant 選択対話 → スキル → ...) |
 | `python core/install.py --update` | アップデート (選択的更新。印なし時は `nextjs` を後方互換マイグレーション) |
+| `python core/install.py --variant=nextjs\|generic` | 対話スキップ (bootstrap.py から渡される。`--update` と併用可) |
 
-初回インストール時は `setup_variant()` が対話で `1) Next.js (プル子)` / `2) その他 (プタ子)` を選ばせ、`.claude/state/variant.json` に書き込む。その後の `setup_skills()` が印を読み、SKILL.md の `variant:` frontmatter と照合して対象スキルのみを配布する。
+初回インストール時は `setup_variant()` が対話で `1) Next.js (プル子)` / `2) その他 (プタ子)` を選ばせ、`.claude/state/variant.json` に書き込む (`--variant=XXX` 指定時は対話スキップ)。その後の `setup_skills()` が印を読み、SKILL.md の `variant:` frontmatter と照合して対象スキルのみを配布する。不正な `--variant=` 値は `sys.exit(2)` で即時エラー終了する (L1.5 責務境界バリデーション)。
+
+### bootstrap.py — プロジェクト初期化ブートストラップ
+
+本元リポジトリ直下に置かれたスタンドアロンスクリプト (標準ライブラリのみ、`core/` に非依存)。プロジェクトディレクトリで実行し、variant 対話 → スターター + コア配置 → `install.py --variant=XXX` 呼び出し → variant 別後続処理、の順で初期化を完了させる。
+
+| コマンド | 内容 |
+|---|---|
+| `python /path/to/erqo-next/bootstrap.py` | 対話で variant を選ばせてから初期化 |
+| `python bootstrap.py --variant=nextjs` | プル子として初期化 (対話スキップ、npm/playwright install も実行) |
+| `python bootstrap.py --variant=generic` | プタ子として初期化 (npm/playwright install はスキップ) |
+
+variant に応じて `stacks/<variant>/starter/` をプロジェクトルートに展開する (プル子 = Next.js 雛形、プタ子 = 案内 README のみ)。giget 取得版 (ソースなし) では GitHub から全 `stacks/` を取得後、指定 variant の starter のみを取り出す。`update_package_name` / `install_dependencies` / `install_playwright` は `variant == nextjs` のときだけ実行する。
 
 ### dev.py — 本体リポジトリ向けセットアップ
 
@@ -372,6 +391,7 @@ coding_rules.py ← 01-workflow.md 本元フロー / skills/codi/SKILL.md ステ
 coding_rules_hook.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
 clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ2-B (build/assemble/baseline) → clone_node/recon.mjs, clone_node/baseline.mjs, clone_node/diff.mjs, clone_node/spector.mjs, clone_node/time-virtualize.mjs, clone_node/rrweb-record.mjs, clone_node/anim_lib_patterns.json
 variant.py ← install.py (setup_variant / _scan_skills 経由の read_variant)
-install.py ← dev.py（ヘルパー再利用） / specs/templates/ から QA 設定を配布 / variant.py から read_variant + write_variant
+install.py ← dev.py（ヘルパー再利用） / bootstrap.py (--variant=XXX で呼び出し) / specs/templates/ から QA 設定を配布 / variant.py から read_variant + write_variant
+bootstrap.py ← ユーザー (プロジェクト初期化エントリポイント、スタンドアロン) → install.py
 fb/handler.py ← /fb
 ```

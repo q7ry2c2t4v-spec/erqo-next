@@ -32,6 +32,10 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
 NXT_CORE_DIR_NAME = ".nxt-core"
 STACKS_DIR_NAME = "stacks"
 NEXTJS_VARIANT_DIR_NAME = "nextjs"
+GENERIC_VARIANT_DIR_NAME = "generic"
+VARIANT_CHOICES = (NEXTJS_VARIANT_DIR_NAME, GENERIC_VARIANT_DIR_NAME)
+DEFAULT_VARIANT = NEXTJS_VARIANT_DIR_NAME
+VARIANT_ARG_PREFIX = "--variant="
 STARTER_DIR_NAME = "starter"
 # 配布ディレクトリ: stacks/ が入るので docs/ を外した
 # (docs は stacks/nextjs/docs/ に移動済み、stacks/ 経由で届く)
@@ -42,9 +46,48 @@ GITHUB_REPO = "q7ry2c2t4v-spec/erqo-next"
 INSTALL_SCRIPT_REL = "core/install.py"
 
 
-def _nextjs_starter_rel() -> Path:
-    """Next.js スターターのソース相対パス (ソースルート or NXT_CORE_DIR_NAME 基点)。"""
-    return Path(STACKS_DIR_NAME) / NEXTJS_VARIANT_DIR_NAME / STARTER_DIR_NAME
+def _stack_starter_rel(variant: str) -> Path:
+    """variant 別スターターのソース相対パス (ソースルート or NXT_CORE_DIR_NAME 基点)。"""
+    return Path(STACKS_DIR_NAME) / variant / STARTER_DIR_NAME
+
+
+def _prompt_variant() -> str:
+    """対話で variant を選ばせる。1/2 を nextjs/generic に変換。非対話時は DEFAULT_VARIANT。"""
+    print("このプロジェクトの種類を選んでください:")
+    print("  1) Next.js プロジェクト (プル子 — 標準、/layo 付き)")
+    print("  2) その他のスタック (プタ子 — 最小構成、/layo なし)")
+    while True:
+        try:
+            answer = input("番号を入力 (1/2): ").strip()
+        except EOFError:
+            print(f"  (非対話モード: {DEFAULT_VARIANT} として登録)")
+            return DEFAULT_VARIANT
+        if answer == "1":
+            return NEXTJS_VARIANT_DIR_NAME
+        if answer == "2":
+            return GENERIC_VARIANT_DIR_NAME
+        print("  エラー: 1 か 2 を入力してください。")
+
+
+def _parse_variant_arg(argv: list[str]) -> str | None:
+    """sys.argv から `--variant=nextjs|generic` を取り出す。
+
+    不正値は sys.exit(2) で終了 (L1.5 責務境界バリデーション)。
+    指定なしは None (対話ルートに委ねる)。
+    """
+    for arg in argv:
+        if not arg.startswith(VARIANT_ARG_PREFIX):
+            continue
+        value = arg[len(VARIANT_ARG_PREFIX):].strip()
+        if value not in VARIANT_CHOICES:
+            print(
+                f"エラー: {VARIANT_ARG_PREFIX} の値は {VARIANT_CHOICES} のいずれか "
+                f"(受け取った値: {value!r})",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        return value
+    return None
 
 
 # --- 関数 ---
@@ -113,8 +156,8 @@ def copy_nxt_core(project_root: Path, source: Path) -> None:
     print(f"  コア: {NXT_CORE_DIR_NAME}/ にコピーしました")
 
 
-def fetch_from_github(project_root: Path) -> None:
-    """giget で GitHub から取得し、starter と core を分離配置する。"""
+def fetch_from_github(project_root: Path, variant: str) -> None:
+    """giget で GitHub から取得し、variant 別 starter と core を分離配置する。"""
     npx = find_command("npx")
 
     nxt_dir = project_root / NXT_CORE_DIR_NAME
@@ -129,8 +172,8 @@ def fetch_from_github(project_root: Path) -> None:
         check=True,
     )
 
-    # stacks/nextjs/starter/ を .nxt-core/ 配下からプロジェクトルートに移動
-    starter_in_nxt = nxt_dir / _nextjs_starter_rel()
+    # stacks/<variant>/starter/ を .nxt-core/ 配下からプロジェクトルートに移動
+    starter_in_nxt = nxt_dir / _stack_starter_rel(variant)
     if starter_in_nxt.exists():
         shutil.copytree(starter_in_nxt, project_root, dirs_exist_ok=True)
         shutil.rmtree(starter_in_nxt)
@@ -154,15 +197,15 @@ def update_package_name(project_root: Path) -> None:
         pass
 
 
-def run_install(project_root: Path) -> None:
-    """install.py を実行する。"""
+def run_install(project_root: Path, variant: str) -> None:
+    """install.py を --variant=<variant> 付きで実行する (variant 対話を skip)。"""
     install_py = project_root / NXT_CORE_DIR_NAME / INSTALL_SCRIPT_REL
     if not install_py.exists():
         print(f"エラー: {install_py} が見つかりません", file=sys.stderr)
         sys.exit(1)
     sys.stdout.flush()
     subprocess.run(
-        [sys.executable, str(install_py)],
+        [sys.executable, str(install_py), f"{VARIANT_ARG_PREFIX}{variant}"],
         cwd=str(project_root),
         check=True,
     )
@@ -217,37 +260,49 @@ def main() -> None:
     print(f"erqo-next ブートストラップ: {project_root.name}")
     print()
 
-    # 1. スターターテンプレート + コアモジュール配置
+    # 1. variant 選択 (プル子 nextjs / プタ子 generic)
+    #    --variant=XXX があれば対話スキップ、なければ対話で聞く
+    forced_variant = _parse_variant_arg(sys.argv[1:])
+    variant = forced_variant if forced_variant is not None else _prompt_variant()
+    print(f"  variant: {variant}")
+    print()
+
+    # 2. スターターテンプレート + コアモジュール配置
     if source:
         print(f"ソース検出: {source}")
-        copy_starter(project_root, source / _nextjs_starter_rel())
+        copy_starter(project_root, source / _stack_starter_rel(variant))
         copy_nxt_core(project_root, source)
     else:
-        fetch_from_github(project_root)
+        fetch_from_github(project_root, variant)
 
-    # 2. package.json のプロジェクト名更新
-    update_package_name(project_root)
+    # 3. package.json のプロジェクト名更新 (プル子のみ package.json が存在)
+    if variant == NEXTJS_VARIANT_DIR_NAME:
+        update_package_name(project_root)
 
-    # 3. git 初期化
+    # 4. git 初期化
     init_git(project_root)
 
     print()
 
-    # 4. install.py 実行 (CLAUDE.md, Hook, スキル, QA 設定)
-    run_install(project_root)
+    # 5. install.py 実行 (CLAUDE.md, Hook, スキル, QA 設定, variant.json)
+    run_install(project_root, variant)
 
     print()
 
-    # 5. npm install
-    install_dependencies(project_root)
-
-    print()
-
-    # 6. Playwright ブラウザ取得
-    install_playwright(project_root)
+    # 6. Next.js 固有の後続処理 (プタ子ではスキップ: スタック依存のセットアップに委ねる)
+    if variant == NEXTJS_VARIANT_DIR_NAME:
+        install_dependencies(project_root)
+        print()
+        install_playwright(project_root)
 
     print("\nセットアップ完了!")
-    print("新しい Claude Code セッションを開始して /dsgn で設計フェーズを始めてください。")
+    if variant == NEXTJS_VARIANT_DIR_NAME:
+        print("新しい Claude Code セッションを開始して /dsgn で設計フェーズを始めてください。")
+    else:
+        print(
+            "README.md に従ってスタックの初期化を行ってから、\n"
+            "新しい Claude Code セッションを開始して /dsgn で設計フェーズを始めてください。"
+        )
 
 
 if __name__ == "__main__":
