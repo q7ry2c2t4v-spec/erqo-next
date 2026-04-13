@@ -26,9 +26,10 @@ CODING_DIR_NAME = "coding"
 
 # --- .libs/ 配下の棚名 ---
 
+RESEARCH_SHELF_NAME = "research"  # .libs/research/ (erqo-research の clone 先でもある)
 STORYBOOK_SHELF_NAME = "storybook"
 LIBS_SHELVES = [
-    "design", "features", "research", "rules", "session-logs",
+    "design", "features", RESEARCH_SHELF_NAME, "rules", "session-logs",
     STORYBOOK_SHELF_NAME, "archive",
 ]
 
@@ -382,6 +383,13 @@ SKILL_FRONTMATTER_VARIANT_KEY = "variant"
 # --- 外部 URL ---
 
 ERQO_REPO_URL = "https://github.com/q7ry2c2t4v-spec/erqo-next.git"
+
+# 研究ノート共有リポジトリ (.libs/research/ として各 OS ルート直下に git clone される)
+# 本元 + 全プロジェクト (プル子 / プタ子) で双方向共有される独立リポジトリ。
+# 詳細設計: .libs/research/os/rsrc-research-shared.md (RSRC-RESEARCH-SHARED)
+RESEARCH_REPO_URL = "https://github.com/q7ry2c2t4v-spec/erqo-research.git"
+# 親リポジトリの .gitignore に書き込むエントリ (.libs/research/ を親から除外)
+RESEARCH_GITIGNORE_ENTRY = f"{LIBS_DIR_NAME}/{RESEARCH_SHELF_NAME}/"
 
 # --- セッション関連の数値 ---
 

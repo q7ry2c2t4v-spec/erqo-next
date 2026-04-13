@@ -21,6 +21,7 @@ from constants import (
     INDEX_FILENAME,
     LIBS_DIR_NAME,
     OS_SKILLS_FILENAME,
+    RESEARCH_SHELF_NAME,
     SETTINGS_FILENAME,
     SKILLS_DIR_NAME,
     SPECS_DIR_NAME,
@@ -65,6 +66,7 @@ SPECS_DIR = NXT_ROOT / SPECS_DIR_NAME
 # .libs/ サブディレクトリ
 DESIGN_DIR = LIBS_DIR / "design" if LIBS_DIR else None
 FEATURES_DIR = LIBS_DIR / "features" if LIBS_DIR else None
+RESEARCH_DIR = LIBS_DIR / RESEARCH_SHELF_NAME if LIBS_DIR else None  # erqo-research の clone 先
 RULES_DIR = LIBS_DIR / "rules" if LIBS_DIR else None
 LOGS_DIR = LIBS_DIR / "session-logs" if LIBS_DIR else None
 
