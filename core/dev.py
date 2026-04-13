@@ -36,6 +36,7 @@ from paths import IS_SOURCE, NXT_ROOT, PROJECT_ROOT
 from constants import CLAUDE_MD_FILENAME, SKILLS_DIR_NAME
 from install import (
     setup_hooks,
+    setup_research_repo,
     setup_skills,
     setup_os_skills_manifest,
     setup_permission_defaults,
@@ -99,6 +100,9 @@ def cmd_setup() -> None:
 
     # 2. 共通 permission 設定
     setup_permission_defaults(PROJECT_ROOT)
+
+    # 2.5. 研究ノート共有リポジトリ (冪等、clone 済みなら何もしない)
+    setup_research_repo(PROJECT_ROOT)
 
     # 3. スキルコピー
     setup_skills(PROJECT_ROOT, update_mode=False)

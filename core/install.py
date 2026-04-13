@@ -12,6 +12,7 @@ import io
 import json
 import shutil
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Windows UTF-8 出力
@@ -40,6 +41,9 @@ from constants import (
     OS_SECTION_HEADING,
     PERMISSION_DEFAULTS_ALLOW,
     PERMISSION_DEFAULTS_MODE,
+    RESEARCH_GITIGNORE_ENTRY,
+    RESEARCH_REPO_URL,
+    RESEARCH_SHELF_NAME,
     SCRIPTS_DIR_NAME,
     SETTINGS_FILENAME,
     SKILL_FRONTMATTER_TARGET_KEY,
@@ -57,14 +61,17 @@ from constants import (
     VARIANTS,
 )
 from feedback import init_error_handling
+from research_sync import ensure_cloned
 from variant import read_variant, write_variant
 
 init_error_handling()
 
 # --- モジュール内派生定数 ---
 
+# research は setup_research_repo が git clone で配置するため STANDARD_DIRS から除外する。
+# 空ディレクトリを先に作ってしまうと clone 先として使えなくなるため、必ず分離する。
 STANDARD_DIRS = [
-    *[f"{LIBS_DIR_NAME}/{s}" for s in LIBS_SHELVES],
+    *[f"{LIBS_DIR_NAME}/{s}" for s in LIBS_SHELVES if s != RESEARCH_SHELF_NAME],
     f"{CLAUDE_DIR_NAME}/{STATE_DIR_NAME}",
     SCRIPTS_DIR_NAME,
     UI_SPECS_DIR_NAME,
@@ -639,6 +646,60 @@ def setup_gitignore(project_root: Path) -> bool:
     return True
 
 
+def setup_research_repo(project_root: Path) -> bool:
+    """研究ノート共有リポジトリ (erqo-research) を .libs/research/ として clone + .gitignore 追記。
+
+    設計: .libs/research/os/rsrc-research-shared.md (RSRC-RESEARCH-SHARED)
+
+    - 既に clone 済み: 何もしない (冪等)
+    - 既存の非 clone ディレクトリ: ローカルバックアップに退避してから clone
+    - 空ディレクトリ: rmdir してから clone
+    - .gitignore に RESEARCH_GITIGNORE_ENTRY を追記 (既存なら skip)
+    - clone 失敗時は stderr に警告のみ、degraded mode で続行 (他の OS 機能は動く)
+    """
+    # 1. .gitignore に RESEARCH_GITIGNORE_ENTRY を追記 (.gitignore が既に存在する場合のみ)
+    gitignore = project_root / GITIGNORE_FILENAME
+    if gitignore.exists():
+        content = gitignore.read_text(encoding="utf-8")
+        entries = {line.strip() for line in content.splitlines()}
+        if RESEARCH_GITIGNORE_ENTRY not in entries:
+            if content and not content.endswith("\n"):
+                content += "\n"
+            content += RESEARCH_GITIGNORE_ENTRY + "\n"
+            gitignore.write_text(content, encoding="utf-8")
+            print(f"  {GITIGNORE_FILENAME}: {RESEARCH_GITIGNORE_ENTRY} 追加")
+
+    # 2. .libs/research/ の現状に応じて clone 準備
+    research_dir = project_root / LIBS_DIR_NAME / RESEARCH_SHELF_NAME
+
+    if (research_dir / ".git").exists():
+        print(f"  {LIBS_DIR_NAME}/{RESEARCH_SHELF_NAME}/: clone 済み (変更なし)")
+        return False
+
+    if research_dir.exists():
+        if any(research_dir.iterdir()):
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            backup = research_dir.parent / f"{RESEARCH_SHELF_NAME}.local-backup-{timestamp}"
+            shutil.move(str(research_dir), str(backup))
+            print(
+                f"  {LIBS_DIR_NAME}/{RESEARCH_SHELF_NAME}/: 既存 (非 clone) を "
+                f"{backup.name} に退避"
+            )
+        else:
+            research_dir.rmdir()
+
+    # 3. clone (research_sync.ensure_cloned に委譲、失敗は warn のみ)
+    ok = ensure_cloned(research_dir)
+    if ok:
+        print(f"  {LIBS_DIR_NAME}/{RESEARCH_SHELF_NAME}/: {RESEARCH_REPO_URL} から clone")
+    else:
+        print(
+            f"  {LIBS_DIR_NAME}/{RESEARCH_SHELF_NAME}/: clone 失敗 "
+            "(degraded mode: 研究ノート無しで続行)"
+        )
+    return ok
+
+
 def setup_qa_configs(project_root: Path) -> int:
     """品質チェック設定ファイルをテンプレートから生成する。既存は上書きしない。"""
     if not TEMPLATES_DIR.exists():
@@ -750,6 +811,10 @@ def main() -> None:
     # 6. .gitignore
     if not update_mode:
         setup_gitignore(project_root)
+
+    # 6.5. 研究ノート共有リポジトリ (.libs/research/ を erqo-research から clone)
+    #      .gitignore が整った後に呼ぶ (RESEARCH_GITIGNORE_ENTRY を追記するため)
+    setup_research_repo(project_root)
 
     # 7. 品質チェック設定 (新規のみ)
     if not update_mode:

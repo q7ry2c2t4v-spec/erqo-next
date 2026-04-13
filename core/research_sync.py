@@ -53,15 +53,30 @@ def _is_clone(dir_path: Path) -> bool:
     return (dir_path / ".git").exists()
 
 
-def _run_git(cwd: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    """git サブコマンドを実行する。check=False で失敗しても戻り値で判定する。"""
-    return subprocess.run(
-        ["git", "-C", str(cwd), *args],
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+# git 操作のデフォルトタイムアウト (session.py の Hook timeout=10 を超えないように短めに)
+_GIT_TIMEOUT_SEC = 10
+_GIT_CLONE_TIMEOUT_SEC = 60  # 初回 clone は時間がかかる可能性
+
+
+def _run_git(
+    cwd: Path, args: list[str], timeout: int = _GIT_TIMEOUT_SEC,
+) -> subprocess.CompletedProcess[str]:
+    """git サブコマンドを実行する。check=False で失敗しても戻り値で判定する。
+    タイムアウト時は returncode=124 + stderr=タイムアウト通知の疑似レスポンスを返す。
+    """
+    try:
+        return subprocess.run(
+            ["git", "-C", str(cwd), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            ["git", "-C", str(cwd), *args], 124, "", f"タイムアウト ({timeout}s)",
+        )
 
 
 def _warn(message: str) -> None:
@@ -82,13 +97,18 @@ def ensure_cloned(research_dir: Path | None = None) -> bool:
         return True
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(
-        ["git", "clone", RESEARCH_REPO_URL, str(target)],
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    try:
+        result = subprocess.run(
+            ["git", "clone", RESEARCH_REPO_URL, str(target)],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=_GIT_CLONE_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired:
+        _warn(f"clone タイムアウト ({_GIT_CLONE_TIMEOUT_SEC}s、degraded mode で続行)")
+        return False
     if result.returncode != 0:
         _warn(f"clone 失敗 (degraded mode で続行): {result.stderr.strip()}")
         return False

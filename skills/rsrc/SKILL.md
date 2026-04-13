@@ -72,13 +72,20 @@ effort: max
 （情報源の URL・名前・参照日）
 ```
 
-### 4. インデックス更新
+### 4. インデックス更新 + 共有リポジトリへ送信
 
-作成後、以下を実行する:
+作成後、以下の 2 コマンドを実行する:
 
 ```bash
 python "{nxt}/core/index.py" reindex
+python "{nxt}/core/research_sync.py" push "rsrc: add RSRC-XXX-YYY"
 ```
+
+- `reindex` で検索インデックス (ローカル `_index.json`) を最新化
+- `research_sync.py push` で研究ノート共有リポジトリ (erqo-research) に裏で add + commit + push
+  - メッセージは作成したページの識別コードを入れる (例: `rsrc: add RSRC-OAUTH-FLOW`)
+  - 失敗時 (ネットワーク不通・認証エラー等) は警告のみで続行。ローカルには保存済みのため次回再試行可能
+  - 他 OS / 他プロジェクトは次回セッション開始時の `auto_pull` で自動取り込み
 
 ### 5. リンク案内
 

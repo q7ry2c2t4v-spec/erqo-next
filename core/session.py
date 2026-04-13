@@ -45,6 +45,7 @@ from constants import (
 from index import reindex
 from page_parser import parse_sections, parse_tp_row
 from feedback import init_error_handling
+from research_sync import auto_pull as research_auto_pull
 
 init_error_handling()
 
@@ -328,6 +329,10 @@ def build_normal_context() -> str:
 
     # 2. インデックス再生成
     run_reindex()
+
+    # 2.5. 研究ノート共有リポジトリの最新を取り込む (git pull --ff-only、裏で静かに実行)
+    #      clone されていない / ネットワーク不通 / 衝突等は警告のみで続行 (degraded mode)
+    research_auto_pull()
 
     # 3. バージョンチェック
     version_msg = check_version()
