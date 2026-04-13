@@ -308,6 +308,18 @@ DETERMINISTIC_STEP_MS = 16
 # 起動後にウォームアップ目的で進めるフレーム数 (= 約 1 秒分)。
 DETERMINISTIC_WARMUP_FRAMES = 60
 
+# --- 段階 4: rrweb 型 DOM 時系列記録 ---
+# RSRC-WEBANIM-HARDCASE §3 "rrweb 型 DOM 時系列記録" に準拠。
+# recon.mjs が rrweb-record.mjs 経由で UMD バンドルを addInitScript で注入し、
+# 取材シナリオ中の Mutation / scroll / mousemove / input を
+# `.libs/storybook/<slug>/recon/site-<i>/rrweb.json` に保存する。
+# clone.py の _format_rrweb_section が本棚ページに「動きの時系列記録」セクションを追加する。
+# 未インストールの環境では recon は rrweb をスキップして続行する (警告のみ)。
+
+RRWEB_OUTPUT_FILENAME = "rrweb.json"
+# 本棚ページに埋め込む冒頭イベントのプレビュー数 (巨大な events 全文は埋めない)
+RRWEB_MAX_EVENTS_PREVIEW = 10
+
 
 # --- コーディングルール判定 (coding_rules.py) ---
 # ファイル拡張子からカテゴリを機械判定するための定数。

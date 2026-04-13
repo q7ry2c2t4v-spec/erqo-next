@@ -30,6 +30,7 @@
     "eslint-config-next": "^15.0.0",
     "pixelmatch": "^6.0.0",
     "pngjs": "^7.0.0",
+    "rrweb": "^2.0.0-alpha.18",
     "storybook": "^8.6.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.0.0"

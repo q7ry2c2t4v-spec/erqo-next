@@ -25,7 +25,8 @@ core/          ← コアモジュール（全スクリプトの土台）
 │   ├── baseline.mjs       ←   VRT 基準スクショ（pixel-perfect 撮影）
 │   ├── diff.mjs           ←   元サイト vs 再現の差分検証（pixelmatch + pngjs）
 │   ├── spector.mjs        ←   WebGL 標準 API で CURRENT_PROGRAM のシェーダ抽出（段階 2）
-│   └── time-virtualize.mjs ←   仮想時計を addInitScript で注入（段階 3）
+│   ├── time-virtualize.mjs ←   仮想時計を addInitScript で注入（段階 3、段階 4 で pause/resume 追加）
+│   └── rrweb-record.mjs    ←   rrweb UMD を addInitScript で注入し DOM 時系列を録画（段階 4）
 ├── session.py
 ├── state.py
 ├── load.py
@@ -229,7 +230,20 @@ RSRC-WEBANIM-HARDCASE §2 "rAF 時間偽装法 — 決定的フレーム取材" 
 - **一元定数**: `constants.py` の `VIDEO_EXTENSIONS` / `DETERMINISTIC_STEP_MS` / `DETERMINISTIC_WARMUP_FRAMES`
 - **制約**: Web Worker / OffscreenCanvas の時計は patch 外。`Promise` / `queueMicrotask` は触らないためイベントループ整合性は保つ。仮想時計を入れると setTimeout 依存の初期化が止まるため `warmupVirtualTime` 呼び出しは必須 (recon.mjs が自動で実行)
 
-段階 4〜5 (Vision LLM フォールバック / VRT 差分自動修正ループ) は別セッションで段階投入する。設計は `.libs/research/webanim/` の 3 ページに固定済み。
+#### アニメーション取材・再現の組み込み (段階 4 導入済 — rrweb 録画 + 仮想時計 pause/resume)
+
+RSRC-WEBANIM-HARDCASE §3 "rrweb 型 DOM 時系列記録" と、段階 3 で発覚した「deterministic + scroll-samples 詰まり」の解消を `clone.py` + `recon.mjs` + 新規 `rrweb-record.mjs` + 既存 `time-virtualize.mjs` に組み込んだ:
+
+- **rrweb 録画モジュール**: `core/clone_node/rrweb-record.mjs` が `installRrwebRecording(page)` + `collectRrwebEvents(page)` を export する。`require.resolve('rrweb')` で UMD バンドル (`rrweb.umd.cjs` / `rrweb.min.js` 等を候補探索) を特定し、Playwright の `addInitScript({path})` で page 先頭に注入。追加の addInitScript で `window.__rrwebEvents__ = []` + `rrweb.record({ emit, sampling: { mousemove: 20, scroll: 100, input: 'all' }, slimDOMOptions: 'all' })` を起動する
+- **`--rrweb` / `--no-rrweb` フラグ**: `recon.mjs` はデフォルト ON (`rrwebEnabled=true`)。desktop viewport の取材完了後に `collectRrwebEvents` で events を回収し `recon/site-<i>/rrweb.json` に保存。未インストール環境では警告のみで取材は続行
+- **仮想時計 pause/resume API**: `time-virtualize.mjs` に `window.__pause__() / __resume__() / __isPaused__()` を追加。`pause` 時は `Date` / `performance.now` / `rAF` / `setTimeout` / `setInterval` を保存済みの実装に差し戻す。保留中の `rafQueue` / `timeouts` は保持し resume 後も発火可能
+- **scroll-samples 実時計化**: `recon.mjs` が `collectScrollSamples` 前後で `--deterministic` 時のみ `window.__pause__()` / `window.__resume__()` を呼び、内部の `requestAnimationFrame` 2 重待ちを実時計に逃がす。framer.com のような大規模 SPA で詰まっていた問題を解消
+- **新セクション 1 つ**: `_format_rrweb_section()` が本棚ページに「動きの時系列記録」セクション (`eventCount` + rrweb EventType 別内訳 + 冒頭 `RRWEB_MAX_EVENTS_PREVIEW` 件の type/timestamp プレビュー) を生成。events 全文は `rrweb.json` を参照する設計 (巨大 JSON の直埋め込み回避)
+- **一元定数**: `constants.py` の `RRWEB_OUTPUT_FILENAME = "rrweb.json"` / `RRWEB_MAX_EVENTS_PREVIEW = 10`
+- **プロジェクト依存**: `starter/package.json` に `rrweb: ^2.0.0-alpha.18` を devDependency として追加。プル子は `install.py --update` で取り込む
+- **制約**: `recordCanvas: true` は重いため off (WebGL 取材は段階 2 の `spector.mjs` が別系統で担当)。`pause/resume` 中に実時計で経過した時間は仮想時計に加算されない (scroll-samples のような「実時計で動かしたい区間」専用)
+
+段階 5 (VRT 差分自動修正ループ) と段階 4 の残課題 (Vision LLM フォールバック、全 WebGL program 履歴追跡) は別セッションで段階投入する。設計は `.libs/research/webanim/` の 3 ページに固定済み。
 
 ### clone_node/diff.mjs — 元サイト vs 再現の差分検証 (Node)
 
@@ -316,7 +330,7 @@ stage_ops.py ← /wrap ステップ 5-4
 write_guard.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
 coding_rules.py ← 01-workflow.md 本元フロー / skills/codi/SKILL.md ステップ2 / coding_rules_hook.py
 coding_rules_hook.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
-clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ2-B (build/assemble/baseline) → clone_node/recon.mjs, clone_node/baseline.mjs, clone_node/diff.mjs, clone_node/spector.mjs, clone_node/time-virtualize.mjs, clone_node/anim_lib_patterns.json
+clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ2-B (build/assemble/baseline) → clone_node/recon.mjs, clone_node/baseline.mjs, clone_node/diff.mjs, clone_node/spector.mjs, clone_node/time-virtualize.mjs, clone_node/rrweb-record.mjs, clone_node/anim_lib_patterns.json
 install.py ← dev.py（ヘルパー再利用） / specs/templates/ から QA 設定を配布
 fb/handler.py ← /fb
 ```

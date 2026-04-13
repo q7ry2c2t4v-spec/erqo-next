@@ -66,6 +66,8 @@ from constants import (
     DIFF_MAX_MISMATCH_RATIO,
     WEBGL_OUTPUT_DIR_NAME,
     WEBGL_SHADERS_FILENAME,
+    RRWEB_OUTPUT_FILENAME,
+    RRWEB_MAX_EVENTS_PREVIEW,
 )
 from page_parser import parse_header, parse_sections
 from feedback import init_error_handling
@@ -1035,6 +1037,100 @@ def _format_video_section(task_id: str, sites: list) -> list[str]:
     return lines
 
 
+# rrweb event type → 日本語名。本棚ページに出す要約で使う。
+# rrweb の EventType enum (src/types.ts) に準拠。この定数は本ファイル内でのみ使う。
+_RRWEB_EVENT_TYPE_NAMES = {
+    0: "DomContentLoaded",
+    1: "Load",
+    2: "FullSnapshot",
+    3: "Incremental",
+    4: "Meta",
+    5: "Custom",
+    6: "Plugin",
+}
+
+
+def _format_rrweb_section(task_id: str, sites: list) -> list[str]:
+    """動きの時系列記録 (rrweb) セクション — 段階 4 で追加。
+
+    RSRC-WEBANIM-HARDCASE §3 "rrweb 型 DOM 時系列記録" に準拠。
+    recon.mjs が rrweb UMD を addInitScript で注入し、取材シナリオ中の
+    MutationObserver / scroll / mousemove / input イベントを時系列で記録した
+    `recon/site-<i>/rrweb.json` を集約する。
+    全文は巨大になりうるので、本棚ページには eventCount と主要タイプの内訳、
+    冒頭 N 件の type/timestamp サマリだけ出す (全文は rrweb.json を参照)。
+    """
+    lines = [f"## {task_id}.動きの時系列記録 — rrweb 時系列取材 (段階 4)", ""]
+    lines.append(
+        "> recon が rrweb 録画を残した結果。DOM の Mutation / scroll / mousemove / input を "
+        "時刻付きで保存。apply / build で「この部分までそっくり真似する」の判断材料や、"
+        "段階 5 の VRT 差分ループで「元サイトと同じ時刻のフレームを比較する」基準として使う。"
+    )
+    lines.append("")
+
+    any_found = False
+
+    for site in sites:
+        meta = site.get("meta") or {}
+        idx = meta.get("index", "?")
+        site_path: Path | None = site.get("path")
+        if site_path is None:
+            continue
+        rrweb_path = site_path / RRWEB_OUTPUT_FILENAME
+        if not rrweb_path.exists():
+            continue
+        try:
+            data = json.loads(rrweb_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        events = data.get("events") or []
+        if not events:
+            continue
+        any_found = True
+        rel = f"recon/site-{idx}/{RRWEB_OUTPUT_FILENAME}"
+
+        # タイプ別内訳
+        type_counts: dict[int, int] = {}
+        for ev in events:
+            t = ev.get("type")
+            if isinstance(t, int):
+                type_counts[t] = type_counts.get(t, 0) + 1
+        type_summary = ", ".join(
+            f"{_RRWEB_EVENT_TYPE_NAMES.get(t, str(t))}={c}"
+            for t, c in sorted(type_counts.items())
+        )
+
+        lines.append(
+            f"### site-{idx} rrweb events ({data.get('eventCount', len(events))} 件)"
+        )
+        lines.append("")
+        lines.append(f"- ファイル: `{rel}`")
+        if type_summary:
+            lines.append(f"- 内訳: {type_summary}")
+        sampling = data.get("sampling") or {}
+        if sampling:
+            parts = [f"{k}={v}" for k, v in sampling.items()]
+            lines.append(f"- sampling: {', '.join(parts)}")
+        lines.append("")
+
+        # 冒頭プレビュー (type / timestamp のみ)
+        preview = events[:RRWEB_MAX_EVENTS_PREVIEW]
+        if preview:
+            lines.append(f"冒頭 {len(preview)} 件 (type / timestamp):")
+            lines.append("")
+            for i, ev in enumerate(preview, 1):
+                t = ev.get("type")
+                name = _RRWEB_EVENT_TYPE_NAMES.get(t, str(t))
+                ts = ev.get("timestamp", "?")
+                lines.append(f"- `#{i}` type=`{name}` ts=`{ts}`")
+            lines.append("")
+
+    if not any_found:
+        lines.append("(rrweb 未実行 / events 0 件 — `recon/site-*/rrweb.json` が未生成)")
+        lines.append("")
+    return lines
+
+
 def _build_bookshelf_page(
     task_id: str, input_meta: dict, recon_data: dict
 ) -> str:
@@ -1120,6 +1216,7 @@ def _build_bookshelf_page(
         lines.extend(_format_assets_section(task_id, sites))
         lines.extend(_format_webgl_section(task_id, sites))
         lines.extend(_format_video_section(task_id, sites))
+        lines.extend(_format_rrweb_section(task_id, sites))
 
     # text-only モード
     elif mode == "text-only":

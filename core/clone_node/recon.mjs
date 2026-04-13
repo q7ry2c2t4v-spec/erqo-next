@@ -9,12 +9,14 @@
 //     [--viewport name:WxH] [--viewport name:WxH] ... \
 //     [--scroll-steps N] [--scroll-selectors sel1,sel2,...] \
 //     [--assets-dir PATH] \
-//     [--deterministic] [--deterministic-step MS] [--deterministic-warmup FRAMES]
+//     [--deterministic] [--deterministic-step MS] [--deterministic-warmup FRAMES] \
+//     [--no-rrweb]
 //
 // 出力:
 //   <output-dir>/screenshot-<name>.png
 //   <output-dir>/recon-<name>.json
 //   <output-dir>/scroll-samples.json                (desktop viewport のみ)
+//   <output-dir>/rrweb.json                         (desktop viewport のみ、段階 4)
 //   <assets-dir>/lottie-*.json / rive-*.riv         (Lottie/Rive 検出時)
 //   <assets-dir>/video-*.mp4 / .webm / .ogg         (背景動画 検出時、段階 3)
 //
@@ -39,6 +41,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { captureWebGLShaders } from './spector.mjs';
 import { installTimeVirtualization, warmupVirtualTime } from './time-virtualize.mjs';
+import { installRrwebRecording, startRrwebRecording, collectRrwebEvents } from './rrweb-record.mjs';
 
 // 段階 3 の時間偽装デフォルト値。core/constants.py の DETERMINISTIC_STEP_MS /
 // DETERMINISTIC_WARMUP_FRAMES と同期させること (SSOT は constants.py)。
@@ -68,6 +71,7 @@ function parseArgs(argv) {
   let deterministic = false;
   let deterministicStepMs = DETERMINISTIC_STEP_MS_DEFAULT;
   let deterministicWarmupFrames = DETERMINISTIC_WARMUP_FRAMES_DEFAULT;
+  let rrwebEnabled = true;  // 段階 4: デフォルト ON、--no-rrweb でオフ
 
   for (let i = 2; i < args.length; i++) {
     if (args[i] === '--viewport' && i + 1 < args.length) {
@@ -96,6 +100,10 @@ function parseArgs(argv) {
     } else if (args[i] === '--deterministic-warmup' && i + 1 < args.length) {
       const v = parseInt(args[++i], 10);
       if (!Number.isNaN(v) && v >= 0) deterministicWarmupFrames = v;
+    } else if (args[i] === '--no-rrweb') {
+      rrwebEnabled = false;
+    } else if (args[i] === '--rrweb') {
+      rrwebEnabled = true;
     }
   }
 
@@ -107,6 +115,7 @@ function parseArgs(argv) {
   return {
     url, outputDir, viewports, scrollSteps, scrollSelectors, assetsDir,
     deterministic, deterministicStepMs, deterministicWarmupFrames,
+    rrwebEnabled,
   };
 }
 
@@ -418,6 +427,7 @@ async function main() {
     url, outputDir, viewports,
     scrollSteps, scrollSelectors, assetsDir,
     deterministic, deterministicStepMs, deterministicWarmupFrames,
+    rrwebEnabled,
   } = parseArgs(process.argv);
 
   await mkdir(outputDir, { recursive: true });
@@ -455,6 +465,20 @@ async function main() {
           );
         } catch (e) {
           console.error(`recon-warn 仮想時計注入失敗: ${e.message}`);
+        }
+      }
+
+      // --- rrweb 録画開始 (段階 4: RSRC-WEBANIM-HARDCASE §3) ---
+      // desktop viewport のみ。UMD を addInitScript で注入し record を起動。
+      // rrweb パッケージが node_modules に無ければスキップする (警告のみ、取材は止めない)。
+      let rrwebInstalled = false;
+      if (rrwebEnabled && vpIdx === 0) {
+        try {
+          const bundlePath = await installRrwebRecording(page);
+          rrwebInstalled = true;
+          console.log(`recon-rrweb install bundle=${bundlePath}`);
+        } catch (e) {
+          console.error(`recon-warn rrweb install スキップ: ${e.message}`);
         }
       }
 
@@ -528,6 +552,36 @@ async function main() {
 
       // --- スクロール連動サンプリング (desktop viewport のみ実行してコスト抑制) ---
       if (scrollSteps > 0 && scrollSelectors.length > 0 && vpIdx === 0) {
+        // 段階 4: deterministic モードだと collectScrollSamples 内の rafTwice() が
+        // 仮想 rAF キューに積まれて外部 __step__ を待つため resolve しない。
+        // scroll-samples は実時計での scrollTo + rAF 待ちを前提としているので、
+        // 実行中だけ仮想時計を一時停止する。
+        if (deterministic) {
+          try {
+            const paused = await page.evaluate(() =>
+              typeof window.__pause__ === 'function' ? window.__pause__() : false
+            );
+            if (paused) {
+              console.log('recon-deterministic scroll-samples paused virtual clock');
+            }
+          } catch (e) {
+            console.error(`recon-warn 仮想時計 pause 失敗: ${e.message}`);
+          }
+        }
+        // 段階 4: rrweb 録画は scroll-samples 区間だけ起動する (goto 直後に起動すると
+        // MutationObserver 発火で fullPage screenshot が timeout するため)。
+        if (rrwebInstalled) {
+          try {
+            const r = await startRrwebRecording(page);
+            if (r.started) {
+              console.log('recon-rrweb record started (scroll-samples window)');
+            } else {
+              console.error(`recon-warn rrweb 起動スキップ: ${r.reason}`);
+            }
+          } catch (e) {
+            console.error(`recon-warn rrweb 起動失敗: ${e.message}`);
+          }
+        }
         try {
           const scrollData = await page.evaluate(
             collectScrollSamples,
@@ -547,6 +601,16 @@ async function main() {
           );
         } catch (e) {
           console.error(`recon-warn スクロールサンプリング失敗: ${e.message}`);
+        }
+        if (deterministic) {
+          try {
+            await page.evaluate(() => {
+              if (typeof window.__resume__ === 'function') window.__resume__();
+            });
+            console.log('recon-deterministic scroll-samples resumed virtual clock');
+          } catch (e) {
+            console.error(`recon-warn 仮想時計 resume 失敗: ${e.message}`);
+          }
         }
       }
 
@@ -576,6 +640,39 @@ async function main() {
           }
         } catch (e) {
           console.error(`recon-warn WebGL capture 失敗: ${e.message}`);
+        }
+      }
+
+      // --- rrweb 録画回収 (段階 4: RSRC-WEBANIM-HARDCASE §3) ---
+      // record を停止して events を取り出し、rrweb.json に保存。
+      // scroll-samples 区間で起動した record を回収する。events が 0 件なら
+      // JSON は書かず report にも載せない (未起動 / scroll-samples 非実行時)。
+      if (rrwebInstalled) {
+        try {
+          const result = await collectRrwebEvents(page);
+          if (result.eventCount > 0) {
+            const rrwebPath = join(outputDir, 'rrweb.json');
+            await writeFile(
+              rrwebPath,
+              JSON.stringify({
+                eventCount: result.eventCount,
+                capturedAt: new Date().toISOString(),
+                url: report.url,
+                sampling: { mousemove: 20, scroll: 100, input: 'all' },
+                events: result.events,
+              }, null, 2),
+              'utf-8',
+            );
+            report.rrweb = {
+              eventCount: result.eventCount,
+              file: 'rrweb.json',
+            };
+            console.log(`recon-rrweb events=${result.eventCount} file=${rrwebPath}`);
+          } else {
+            console.log('recon-rrweb events=0 (record 未起動 or scroll-samples 非実行)');
+          }
+        } catch (e) {
+          console.error(`recon-warn rrweb 回収失敗: ${e.message}`);
         }
       }
 
