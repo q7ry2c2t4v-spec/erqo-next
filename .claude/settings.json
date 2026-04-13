@@ -51,6 +51,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/./core/project_servers_hook.py\"",
+            "timeout": 5
+          }
+        ]
       }
     ]
   },

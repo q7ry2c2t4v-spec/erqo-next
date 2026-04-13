@@ -45,7 +45,7 @@ from constants import (
 from index import reindex
 from page_parser import parse_sections, parse_tp_row
 from feedback import init_error_handling
-from research_sync import auto_pull as research_auto_pull
+from research_sync import auto_pull as research_auto_pull, missing_clone_warning as research_missing_warning
 
 init_error_handling()
 
@@ -333,6 +333,10 @@ def build_normal_context() -> str:
     # 2.5. 研究ノート共有リポジトリの最新を取り込む (git pull --ff-only、裏で静かに実行)
     #      clone されていない / ネットワーク不通 / 衝突等は警告のみで続行 (degraded mode)
     research_auto_pull()
+    # 2.6. 未 clone なら復旧手順を表示 (PC 乗り換え後の初回セットアップ忘れ対策)
+    research_warn = research_missing_warning()
+    if research_warn:
+        parts.append(research_warn)
 
     # 3. バージョンチェック
     version_msg = check_version()
@@ -384,6 +388,11 @@ def build_normal_context() -> str:
 def build_compact_context() -> str:
     """compact モード: 視点宣言ゲート + 中断パイプライン + 進行中タスク + 直近決定事項。"""
     parts = [build_orientation_gate()]
+
+    # 0. 研究ノート共有リポジトリの未 clone 警告 (PC 乗り換え後の初回セットアップ忘れ対策)
+    research_warn = research_missing_warning()
+    if research_warn:
+        parts.append(research_warn)
 
     # 1. 中断パイプライン
     interrupted = find_interrupted_pipelines()

@@ -28,7 +28,7 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 from constants import RESEARCH_REPO_URL
-from paths import PROJECT_ROOT, RESEARCH_DIR
+from paths import IS_SOURCE, PROJECT_ROOT, RESEARCH_DIR
 from feedback import init_error_handling
 
 init_error_handling()
@@ -113,6 +113,25 @@ def ensure_cloned(research_dir: Path | None = None) -> bool:
         _warn(f"clone 失敗 (degraded mode で続行): {result.stderr.strip()}")
         return False
     return True
+
+
+def missing_clone_warning(research_dir: Path | None = None) -> str | None:
+    """clone されていなければ復旧手順付きの警告文字列を返す。clone 済みなら None。
+
+    session.py などが呼んでセッション冒頭に表示する想定。fail-open 設計:
+    RESEARCH_DIR 未決定 (PROJECT_ROOT 不明) 時は None を返して静かに無視する。
+    """
+    target = research_dir if research_dir is not None else RESEARCH_DIR
+    if target is None or _is_clone(target):
+        return None
+    setup_cmd = (
+        "python core/dev.py setup" if IS_SOURCE
+        else "python .nxt-core/core/install.py --update"
+    )
+    return (
+        "⚠ `.libs/research/` が未セットアップです。"
+        f"`{setup_cmd}` を実行して研究ノート共有リポジトリを取り込んでください。"
+    )
 
 
 def auto_pull(research_dir: Path | None = None) -> None:

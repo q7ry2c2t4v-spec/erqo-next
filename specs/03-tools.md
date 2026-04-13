@@ -28,6 +28,7 @@ core/          ← コアモジュール（全スクリプトの土台）
 │   ├── spector.mjs        ←   WebGL 標準 API で CURRENT_PROGRAM のシェーダ抽出（段階 2）
 │   ├── time-virtualize.mjs ←   仮想時計を addInitScript で注入（段階 3、段階 4 で pause/resume 追加）
 │   └── rrweb-record.mjs    ←   rrweb UMD を addInitScript で注入し DOM 時系列を録画（段階 4）
+├── research_sync.py       ← .libs/research/ を erqo-research と同期（clone / pull / push / 未 clone 警告）
 ├── session.py
 ├── state.py
 ├── load.py
@@ -317,6 +318,25 @@ RSRC-WEBANIM-HARDCASE §1 の制約「CURRENT_PROGRAM 1 つのみ抽出」を解
 
 プロジェクト側は `starter/package.json` に `pixelmatch` + `pngjs` を dep として宣言している (bootstrap.py 経由で自動インストール)。
 
+### research_sync.py — 研究ノート共有リポジトリ同期
+
+`.libs/research/` を独立リポジトリ `erqo-research` と同期する薄いラッパ (標準ライブラリのみ、subprocess で git 呼び出し)。設計: `.libs/research/os/rsrc-research-shared.md` (RSRC-RESEARCH-SHARED)。失敗しても致命的エラーにせず stderr 警告のみで続行する (degraded mode)。
+
+| 関数 | 呼び出し元 | 内容 |
+|---|---|---|
+| `ensure_cloned()` | `install.py:setup_research_repo` / `dev.py:cmd_setup` | `.libs/research/` が無ければ `git clone`。初回セットアップ用 |
+| `auto_pull()` | `session.py:build_normal_context` | clone 済みなら `git pull --ff-only`。セッション開始時の裏同期 |
+| `auto_push(message)` | `/rsrc` ステップ 4 | 変更があれば add + commit + push |
+| `missing_clone_warning()` | `session.py:build_normal_context` / `build_compact_context` | 未 clone なら復旧コマンド付きの警告文字列を返す (本元/プロジェクトで `dev.py setup` / `install.py --update` に分岐)。clone 済みなら `None`。PC 乗り換え後の初回セットアップ忘れ対策 |
+
+| CLI サブコマンド | 内容 |
+|---|---|
+| `python core/research_sync.py ensure` | 無ければ clone |
+| `python core/research_sync.py pull` | 最新を取り込み |
+| `python core/research_sync.py push "msg"` | 変更を送信 |
+
+git 操作タイムアウト: `_GIT_TIMEOUT_SEC = 10` (SessionStart Hook の timeout=10s に収まる)、初回 clone のみ `_GIT_CLONE_TIMEOUT_SEC = 60`。タイムアウト時は `returncode=124` の疑似 `CompletedProcess` を返して degraded mode で続行。
+
 ### session.py — セッション管理
 
 SessionStart Hook から呼ばれる。
@@ -393,5 +413,6 @@ clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ
 variant.py ← install.py (setup_variant / _scan_skills 経由の read_variant)
 install.py ← dev.py（ヘルパー再利用） / bootstrap.py (--variant=XXX で呼び出し) / specs/templates/ から QA 設定を配布 / variant.py から read_variant + write_variant
 bootstrap.py ← ユーザー (プロジェクト初期化エントリポイント、スタンドアロン) → install.py
+research_sync.py ← install.py (setup_research_repo → ensure_cloned) / dev.py (cmd_setup 経由) / session.py (auto_pull + missing_clone_warning) / skills/rsrc (auto_push)
 fb/handler.py ← /fb
 ```
