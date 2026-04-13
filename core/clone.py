@@ -102,7 +102,8 @@ def _build_input_template(task_id: str) -> str:
         "- https://example.com/\n"
         "\n"
         f"## {task_id}.採用ライブラリ — 採用ライブラリ指定 (任意)\n"
-        "- (空欄なら recon 検出結果から自動選択。指定するなら gsap / motion / lenis / r3f / lottie / pure-css のいずれか)\n"
+        "- (空欄なら recon 検出結果から自動選択)\n"
+        "<!-- 指定する場合は gsap / motion / lenis / r3f / lottie / pure-css のいずれかを書く -->\n"
         "\n"
         f"## {task_id}.要望 — 要望\n"
         "- \n"
@@ -1640,7 +1641,21 @@ def _detect_adopted_library(task_id: str, page_md: str) -> tuple[str, str]:
             for sec in parse_sections(input_content):
                 if not sec["id"].endswith(".採用ライブラリ"):
                     continue
-                body = sec["content"].strip().lower()
+                # 案内文 (HTML コメント / 箇条書きの括弧プレースホルダ) を除外し、
+                # ユーザーが明示的に書いた指定だけを判定対象にする
+                filtered: list[str] = []
+                for line in sec["content"].split("\n"):
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("<!--"):
+                        continue
+                    if stripped.startswith(("-", "*")):
+                        content = stripped[1:].strip()
+                    else:
+                        content = stripped
+                    if content.startswith(("(", "<!--")):
+                        continue
+                    filtered.append(content)
+                body = " ".join(filtered).lower()
                 for key in _TSX_SKELETON_BY_LIB:
                     if re.search(rf"\b{re.escape(key)}\b", body):
                         return key, f"input.md のユーザー指定 (`{key}`)"
