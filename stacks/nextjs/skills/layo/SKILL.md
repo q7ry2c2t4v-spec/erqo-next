@@ -1,6 +1,7 @@
 ---
 name: layo
 target: project
+variant: nextjs
 description: "/layo ID-CODE" - レイアウトデザインの策定・修正。参考サイト解析 + デザインリファレンス + ルール参照で本棚ページを作成・更新する。何度でも実行可能。
 argument-hint: ID-CODE（例: LAYOUT-HERO）
 effort: max

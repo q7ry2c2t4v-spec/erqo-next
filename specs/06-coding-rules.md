@@ -98,7 +98,7 @@ specs/coding/l3-nextjs.md                (L3 Next.js)
 |---|---|
 | `specs/coding/l2-python.md` | Python 共通 (`core/paths.py`/`constants.py` 配置、uv、Ruff、pyright、pytest、pre-commit、structlog) |
 | `specs/coding/l2-typescript.md` | TypeScript 共通 (strict、パスエイリアス、`env.ts` 1 箇所検証、import 整理) |
-| `specs/coding/l3-nextjs.md` | Next.js 15+ (Tailwind `@theme`、Server/Client 境界、データ取得、ESLint Flat Config、PPR、DAL、DAL) |
+| `stacks/nextjs/specs/coding/l3-nextjs.md` | Next.js 15+ (Tailwind `@theme`、Server/Client 境界、データ取得、ESLint Flat Config、PPR、DAL) — Next.js 装備のためプル子専用、配置は `stacks/nextjs/` 配下 |
 | `specs/coding/l3-cloudflare.md` | Cloudflare Workers (wrangler.jsonc、Hono、Durable Objects SQLite、`vitest-pool-workers`、Gradual Rollouts、Observability) |
 
 ---

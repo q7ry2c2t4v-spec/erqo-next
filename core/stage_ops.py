@@ -115,6 +115,16 @@ def cmd_collect() -> None:
         _print_list("除外（ブラックリスト）", excluded)
 
 
+_GIT_ADD_BATCH_SIZE = 200  # Windows の CreateProcess 引数長制限 (~32k) を避けるためのバッチ幅
+
+
+def _git_add_batched(files: list[str]) -> None:
+    """`git add -- <files>` をバッチ分割して実行する (Windows の引数長制限回避)。"""
+    for i in range(0, len(files), _GIT_ADD_BATCH_SIZE):
+        batch = files[i:i + _GIT_ADD_BATCH_SIZE]
+        _run(["git", "add", "--"] + batch)
+
+
 def cmd_stage() -> None:
     """ステージング対象を実際に git add する。"""
     included, excluded = _collect_files()
@@ -124,7 +134,7 @@ def cmd_stage() -> None:
         else:
             print("変更なし")
         return
-    _run(["git", "add", "--"] + included)
+    _git_add_batched(included)
     _print_list("ステージング完了", included)
     if excluded:
         print()

@@ -17,6 +17,9 @@ SPECS_DIR_NAME = "specs"
 TEMPLATES_DIR_NAME = "templates"
 FEEDBACK_DIR_NAME = "feedback"
 HISTORY_DIR_NAME = "history"
+DOCS_DIR_NAME = "docs"
+STARTER_DIR_NAME = "starter"
+STACKS_DIR_NAME = "stacks"  # variant 別装備のルートディレクトリ名
 
 # specs/ サブディレクトリ
 CODING_DIR_NAME = "coding"
@@ -355,6 +358,26 @@ CODING_RULES_HOOK_HEADER = (
 CODING_RULES_HOOK_FOOTER = (
     "詳細: specs/06-coding-rules.md §0 適用マトリックス / specs/08-responsibility.md"
 )
+
+# --- variant (プル子 / プタ子 の識別子) ---
+# プロジェクトの .claude/state/variant.json に保存される印の値。
+# 本元 (IS_SOURCE) では variant 概念を使わない (read_variant が VARIANT_DEFAULT を返す)。
+# 印がないプロジェクトは既存プル子として扱う (後方互換)。
+# SKILL.md frontmatter の variant: も同じ値空間 (+ VARIANT_BOTH) を使う。
+
+VARIANT_NEXTJS = "nextjs"     # プル子 (Next.js プロジェクト、/layo 付き)
+VARIANT_GENERIC = "generic"   # プタ子 (任意スタック、/layo 非配布)
+VARIANT_BOTH = "both"         # SKILL.md frontmatter での「両対応」
+VARIANTS = (VARIANT_NEXTJS, VARIANT_GENERIC)  # 印の有効値
+VARIANT_DEFAULT = VARIANT_NEXTJS              # 印なし時のフォールバック (既存プル子互換)
+
+# .claude/state/variant.json のファイル名と鍵
+VARIANT_FILE_NAME = "variant.json"
+VARIANT_JSON_KEY = "variant"
+
+# SKILL.md frontmatter の鍵
+SKILL_FRONTMATTER_TARGET_KEY = "target"
+SKILL_FRONTMATTER_VARIANT_KEY = "variant"
 
 # --- 外部 URL ---
 

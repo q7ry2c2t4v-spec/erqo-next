@@ -20,7 +20,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8
 if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
-from paths import NXT_ROOT, IS_SOURCE, TEMPLATES_DIR
+from paths import NXT_ROOT, IS_SOURCE, STACK_NEXTJS_SKILLS_DIR, TEMPLATES_DIR
 from constants import (
     LIBS_SHELVES,
     DEFAULT_GITIGNORE_LINES,
@@ -36,12 +36,21 @@ from constants import (
     PERMISSION_DEFAULTS_MODE,
     SCRIPTS_DIR_NAME,
     SETTINGS_FILENAME,
+    SKILL_FRONTMATTER_TARGET_KEY,
+    SKILL_FRONTMATTER_VARIANT_KEY,
     SKILL_MD_FILENAME,
     SKILLS_DIR_NAME,
     STATE_DIR_NAME,
     UI_SPECS_DIR_NAME,
+    VARIANT_BOTH,
+    VARIANT_DEFAULT,
+    VARIANT_FILE_NAME,
+    VARIANT_GENERIC,
+    VARIANT_JSON_KEY,
+    VARIANT_NEXTJS,
 )
 from feedback import init_error_handling
+from variant import read_variant, write_variant
 
 init_error_handling()
 
@@ -276,6 +285,60 @@ def setup_hooks(project_root: Path) -> bool:
     return added_total > 0
 
 
+def _prompt_variant() -> str:
+    """対話で variant を選ばせる。1/2 の入力を VARIANT_NEXTJS/VARIANT_GENERIC に変換。
+
+    非対話環境 (EOFError) では VARIANT_DEFAULT (プル子) に倒す。
+    """
+    print("このプロジェクトの種類を選んでください:")
+    print("  1) Next.js プロジェクト (プル子 — 標準、/layo 付き)")
+    print("  2) その他のスタック (プタ子 — 最小構成、/layo なし)")
+    while True:
+        try:
+            answer = input("番号を入力 (1/2): ").strip()
+        except EOFError:
+            print(f"  (非対話モード: {VARIANT_DEFAULT} として登録)")
+            return VARIANT_DEFAULT
+        if answer == "1":
+            return VARIANT_NEXTJS
+        if answer == "2":
+            return VARIANT_GENERIC
+        print("  エラー: 1 か 2 を入力してください。")
+
+
+def setup_variant(project_root: Path, update_mode: bool) -> bool:
+    """variant.json を作成または migrate する。
+
+    - 既に印がある: 触らない (冪等)
+    - 新規インストール (update_mode=False) + 印なし: 対話で選ばせる
+    - アップデート (update_mode=True) + 印なし: VARIANT_DEFAULT を書く
+      (既存プル子の後方互換マイグレーション)
+    """
+    variant_file = _state_dir(project_root) / VARIANT_FILE_NAME
+    if variant_file.exists():
+        try:
+            current = json.loads(variant_file.read_text(encoding="utf-8")).get(
+                VARIANT_JSON_KEY, "?"
+            )
+            print(f"  {VARIANT_FILE_NAME}: 既存 ({current})")
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            print(f"  {VARIANT_FILE_NAME}: 既存 (読み込み失敗でスキップ)")
+        return False
+
+    if update_mode:
+        value = VARIANT_DEFAULT
+        print(
+            f"  {VARIANT_FILE_NAME}: 印なし → {VARIANT_DEFAULT} として登録"
+            " (既存プル子の後方互換マイグレーション)"
+        )
+    else:
+        value = _prompt_variant()
+
+    write_variant(value)
+    print(f"  {VARIANT_FILE_NAME}: {value} として保存")
+    return True
+
+
 def setup_permission_defaults(project_root: Path) -> bool:
     """settings.json に共通 permission 設定をマージする。
 
@@ -320,51 +383,85 @@ def setup_permission_defaults(project_root: Path) -> bool:
     return changed
 
 
-def _read_skill_target(skill_md_path: Path) -> str:
-    """SKILL.md のフロントマター `target:` を読み、`project` / `both` 等を返す。
+def _read_skill_frontmatter_field(skill_md_path: Path, field: str, default: str) -> str:
+    """SKILL.md の YAML frontmatter から指定フィールドを読む。
 
-    frontmatter や `target:` 行が欠落している場合は後方互換で `both` 扱い
-    (エル子・プル子の両方で使える、呼称は specs/00-identity.md 参照)。
+    frontmatter が欠落・不正の場合や、該当 field が無い場合は default を返す。
     """
     try:
         content = skill_md_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return "both"
+        return default
     if not content.startswith("---"):
-        return "both"
+        return default
     end = content.find("\n---", 3)
     if end < 0:
-        return "both"
+        return default
     front = content[3:end]
+    prefix = f"{field}:"
     for line in front.splitlines():
         stripped = line.strip()
-        if stripped.startswith("target:"):
+        if stripped.startswith(prefix):
             return stripped.split(":", 1)[1].strip()
-    return "both"
+    return default
 
 
-def _scan_skills() -> list[str]:
-    """NXT_ROOT/skills/ 内のスキルを自動スキャンする。
+def _read_skill_target(skill_md_path: Path) -> str:
+    """SKILL.md の `target:` を読む。欠落時は "both" (本元・プル子両対応)。"""
+    return _read_skill_frontmatter_field(skill_md_path, SKILL_FRONTMATTER_TARGET_KEY, "both")
 
-    各 SKILL.md の frontmatter `target:` を読み、本元 (IS_SOURCE = エル子) では
-    `target: project` のスキルを除外する。`target: both` または欠落時は両方で
-    使えると解釈する。プロジェクト (プル子) 側では全スキルを返す。
+
+def _read_skill_variant(skill_md_path: Path) -> str:
+    """SKILL.md の `variant:` を読む。欠落時は VARIANT_BOTH (プル子・プタ子両対応)。"""
+    return _read_skill_frontmatter_field(skill_md_path, SKILL_FRONTMATTER_VARIANT_KEY, VARIANT_BOTH)
+
+
+# variant → stacks/<variant>/skills/ のマッピング
+# 段階 3 で VARIANT_GENERIC: STACK_GENERIC_SKILLS_DIR を追加する想定。
+_STACK_SKILLS_DIRS: dict[str, Path] = {
+    VARIANT_NEXTJS: STACK_NEXTJS_SKILLS_DIR,
+}
+
+
+def _scan_skills() -> list[tuple[str, Path]]:
+    """共通 + variant 固有の skills/ 配下をスキャンし、(name, src_root) のリストを返す。
+
+    走査対象:
+    - 共通: NXT_ROOT / skills/ (本元・プロジェクト共通)
+    - variant 固有: stacks/<variant>/skills/ (プロジェクトの印に該当するもののみ)
+
+    target フィルタ: 本元 (IS_SOURCE) では `target: project` を除外。
+    variant フィルタ: プロジェクト側では SKILL.md の `variant:` と照合 (本元では無効)。
+    同名衝突: 共通側が先勝ち (scan_targets の並び順)。
     """
-    skills_dir = NXT_ROOT / SKILLS_DIR_NAME
-    if not skills_dir.exists():
-        return []
+    variant_filter = None if IS_SOURCE else read_variant()
 
-    result: list[str] = []
-    for d in sorted(skills_dir.iterdir()):
-        if not d.is_dir():
+    scan_targets: list[Path] = [NXT_ROOT / SKILLS_DIR_NAME]
+    if variant_filter in _STACK_SKILLS_DIRS:
+        scan_targets.append(_STACK_SKILLS_DIRS[variant_filter])
+
+    result: list[tuple[str, Path]] = []
+    seen: set[str] = set()
+    for src_root in scan_targets:
+        if not src_root.exists():
             continue
-        skill_md = d / SKILL_MD_FILENAME
-        if not skill_md.exists():
-            continue
-        target = _read_skill_target(skill_md)
-        if IS_SOURCE and target == "project":
-            continue
-        result.append(d.name)
+        for d in sorted(src_root.iterdir()):
+            if not d.is_dir():
+                continue
+            if d.name in seen:
+                continue
+            skill_md = d / SKILL_MD_FILENAME
+            if not skill_md.exists():
+                continue
+            target = _read_skill_target(skill_md)
+            if IS_SOURCE and target == "project":
+                continue
+            if variant_filter is not None:
+                skill_variant = _read_skill_variant(skill_md)
+                if skill_variant != VARIANT_BOTH and skill_variant != variant_filter:
+                    continue
+            result.append((d.name, src_root))
+            seen.add(d.name)
     return result
 
 
@@ -395,9 +492,11 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
           - 削除されたスキル → .claude/skills/ から削除（stale 除去）
           - 新規追加されたスキル → コピー（自動取り込み）
           固有スキル（マニフェスト外）は保持される。
+
+    コピー元は variant に応じて共通 skills/ と stacks/<variant>/skills/ の両方から
+    `_scan_skills()` が (name, src_root) 形式で返したリストに従う。
     """
     nxt_path = _nxt_relpath(project_root)
-    src_dir = NXT_ROOT / SKILLS_DIR_NAME
     dst_dir = _project_skills_dir(project_root)
     dst_dir.mkdir(parents=True, exist_ok=True)
 
@@ -405,6 +504,8 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
     if not os_skills:
         print("  スキル: ソースなし (スキップ)")
         return 0
+
+    current_names = {name for name, _ in os_skills}
 
     # 更新モード: 前回のマニフェストと突き合わせて stale 削除を行う
     removed = 0
@@ -418,21 +519,17 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
             except (json.JSONDecodeError, OSError):
                 previous_managed = set()
 
-        # stale: 前回管理していたが現在の skills/ に存在しないもの
-        current = set(os_skills)
-        stale = previous_managed - current
+        # stale: 前回管理していたが現在のスキル一覧に存在しないもの
+        stale = previous_managed - current_names
         for skill_name in sorted(stale):
             stale_path = dst_dir / skill_name
             if stale_path.exists():
                 shutil.rmtree(stale_path)
                 removed += 1
 
-    # コピー対象: 新規モードでも更新モードでも現在の os_skills 全てを反映
-    targets = os_skills
-
     count = 0
-    for skill_name in targets:
-        src_skill = src_dir / skill_name
+    for skill_name, src_root in os_skills:
+        src_skill = src_root / skill_name
         dst_skill = dst_dir / skill_name
         if dst_skill.exists():
             shutil.rmtree(dst_skill)
@@ -449,7 +546,7 @@ def setup_skills(project_root: Path, update_mode: bool) -> int:
 
 def setup_os_skills_manifest(project_root: Path) -> None:
     """_os_skills.json を生成する。OS 提供スキルの一覧を記録。"""
-    os_skills = _scan_skills()
+    os_skills = [name for name, _ in _scan_skills()]
     manifest = {"version": "1.0.0", "skills": os_skills}
 
     manifest_path = _os_skills_manifest_path(project_root)
@@ -593,6 +690,10 @@ def main() -> None:
 
     # 2.5. 共通 permission 設定
     setup_permission_defaults(project_root)
+
+    # 2.7. variant (プル子 / プタ子) 選択 / マイグレーション
+    #      スキルコピー前に書き込む (setup_skills 内の variant フィルタが印を読むため)
+    setup_variant(project_root, update_mode)
 
     # 3. スキルコピー
     setup_skills(project_root, update_mode)

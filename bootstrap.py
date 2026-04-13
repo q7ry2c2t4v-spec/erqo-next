@@ -30,12 +30,21 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
 # 以下はこのモジュール内でのみ使用する固有定数。
 
 NXT_CORE_DIR_NAME = ".nxt-core"
+STACKS_DIR_NAME = "stacks"
+NEXTJS_VARIANT_DIR_NAME = "nextjs"
 STARTER_DIR_NAME = "starter"
-DIST_DIRS = ("specs", "core", "skills", "docs")
+# 配布ディレクトリ: stacks/ が入るので docs/ を外した
+# (docs は stacks/nextjs/docs/ に移動済み、stacks/ 経由で届く)
+DIST_DIRS = ("specs", "core", "skills", STACKS_DIR_NAME)
 DIST_FILES = ("VERSION",)
 SOURCE_MARKER_FILES = ("core/paths.py", "core/constants.py", "core/install.py")
 GITHUB_REPO = "q7ry2c2t4v-spec/erqo-next"
 INSTALL_SCRIPT_REL = "core/install.py"
+
+
+def _nextjs_starter_rel() -> Path:
+    """Next.js スターターのソース相対パス (ソースルート or NXT_CORE_DIR_NAME 基点)。"""
+    return Path(STACKS_DIR_NAME) / NEXTJS_VARIANT_DIR_NAME / STARTER_DIR_NAME
 
 
 # --- 関数 ---
@@ -120,8 +129,8 @@ def fetch_from_github(project_root: Path) -> None:
         check=True,
     )
 
-    # starter/ を .nxt-core/ からプロジェクトルートに移動
-    starter_in_nxt = nxt_dir / STARTER_DIR_NAME
+    # stacks/nextjs/starter/ を .nxt-core/ 配下からプロジェクトルートに移動
+    starter_in_nxt = nxt_dir / _nextjs_starter_rel()
     if starter_in_nxt.exists():
         shutil.copytree(starter_in_nxt, project_root, dirs_exist_ok=True)
         shutil.rmtree(starter_in_nxt)
@@ -211,7 +220,7 @@ def main() -> None:
     # 1. スターターテンプレート + コアモジュール配置
     if source:
         print(f"ソース検出: {source}")
-        copy_starter(project_root, source / STARTER_DIR_NAME)
+        copy_starter(project_root, source / _nextjs_starter_rel())
         copy_nxt_core(project_root, source)
     else:
         fetch_from_github(project_root)
