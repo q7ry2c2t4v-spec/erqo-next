@@ -9,6 +9,7 @@ UI 判定・docs 検索・関連ページ収集を行い、コンテキストを
 
 import io
 import re
+import os
 import sys
 from pathlib import Path
 
@@ -311,7 +312,25 @@ def main() -> None:
         sys.exit(1)
 
     task_id = sys.argv[1].upper()
-    print(load_task(task_id))
+    output = load_task(task_id)
+
+    try:
+        print(output)
+        sys.stdout.flush()
+    except (BrokenPipeError, OSError) as exc:
+        # 受け側のパイプが先に閉じた (`... | head` 等)。
+        # Unix では BrokenPipeError、Windows では OSError [Errno 22] で来る。
+        # 終了処理時の自動 flush で再度同じエラーが出ないよう、
+        # stdout を NUL (Unix なら /dev/null) にリダイレクトしてから抜ける。
+        # 参考: https://docs.python.org/3/library/signal.html#note-on-sigpipe
+        if not isinstance(exc, BrokenPipeError) and exc.errno not in (22, 32):
+            raise
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, sys.stdout.fileno())
+        except OSError:
+            pass
+        sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -46,6 +46,10 @@ init_error_handling()
 
 # --- 定数 ---
 
+# TP テーブルの列構成: | # | 識別コード | タスク | 依存 | ステータス |
+# line.split("|") は先頭・末尾の空セルも含むため、識別コードセルは index 2
+TP_TABLE_TASK_ID_COL = 2
+
 TEMPLATE = """\
 # {task_id} — {title}
 
@@ -308,7 +312,11 @@ def update_status(task_id: str) -> None:
         updated = False
         new_lines = []
         for line in lines:
-            if task_id in line and "|" in line:
+            # 識別コードセルとの完全一致でマッチさせる。
+            # substring match だと依存セルに書かれた他タスクの識別子も
+            # 誤って完了化される (yokemo で再現確定したバグ)。
+            cells = [c.strip() for c in line.split("|")]
+            if len(cells) > TP_TABLE_TASK_ID_COL and cells[TP_TABLE_TASK_ID_COL] == task_id:
                 line = re.sub(rf"{STATUS_TODO}|{STATUS_WIP}", STATUS_DONE, line)
                 updated = True
             new_lines.append(line)
