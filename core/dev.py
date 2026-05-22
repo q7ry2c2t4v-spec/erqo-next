@@ -35,6 +35,7 @@ if sys.stderr.encoding and sys.stderr.encoding.lower().replace("-", "") != "utf8
 from paths import IS_SOURCE, NXT_ROOT, PROJECT_ROOT
 from constants import CLAUDE_MD_FILENAME, SKILLS_DIR_NAME
 from install import (
+    setup_feedback_shared_repo,
     setup_hooks,
     setup_research_repo,
     setup_skills,
@@ -103,6 +104,9 @@ def cmd_setup() -> None:
 
     # 2.5. 研究ノート共有リポジトリ (冪等、clone 済みなら何もしない)
     setup_research_repo(PROJECT_ROOT)
+
+    # 2.6. フィードバック共有リポジトリ (冪等、未作成時は degraded mode)
+    setup_feedback_shared_repo(PROJECT_ROOT)
 
     # 3. スキルコピー
     setup_skills(PROJECT_ROOT, update_mode=False)

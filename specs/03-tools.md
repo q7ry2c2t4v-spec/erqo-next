@@ -359,6 +359,33 @@ RSRC-WEBANIM-HARDCASE §1 の制約「CURRENT_PROGRAM 1 つのみ抽出」を解
 
 git 操作タイムアウト: `_GIT_TIMEOUT_SEC = 10` (SessionStart Hook の timeout=10s に収まる)、初回 clone のみ `_GIT_CLONE_TIMEOUT_SEC = 60`。タイムアウト時は `returncode=124` の疑似 `CompletedProcess` を返して degraded mode で続行。
 
+### feedback_sync.py — フィードバック共有リポジトリ同期
+
+`.libs/fb-shared/` を独立リポジトリ `erqo-feedback` と同期する薄いラッパ (標準ライブラリのみ、subprocess で git 呼び出し)。**プロジェクト → 本元への一方向通知経路** (erqo-research は双方向、これは一方向の点が違う)。失敗しても致命的エラーにせず stderr 警告のみで続行する (degraded mode)。
+
+| 関数 | 呼び出し元 | 内容 |
+|---|---|---|
+| `ensure_cloned()` | `install.py:setup_feedback_shared_repo` / `dev.py:cmd_setup` | `.libs/fb-shared/` が無ければ `git clone`。初回セットアップ用 |
+| `auto_pull()` | `session.py:build_normal_context` | clone 済みなら `git pull --ff-only`。本元側がセッション開始時に新着 inbox を取り込む |
+| `push_report(report_path)` | `feedback.py:send_feedback` | プロジェクトの fb JSON を `inbox/<project_name>-<filename>.json` にコピーし add + commit + push |
+| `missing_clone_warning()` | `session.py:build_normal_context` / `build_compact_context` | 未 clone なら復旧コマンド + リポジトリ作成手順を返す。clone 済みなら `None` |
+| `list_inbox(limit=10)` | `session.py:build_normal_context` (IS_SOURCE 限定) | inbox の JSON 一覧を新しい順に返す (新着通知用) |
+
+| CLI サブコマンド | 内容 |
+|---|---|
+| `python core/feedback_sync.py ensure` | 無ければ clone |
+| `python core/feedback_sync.py pull` | 最新を取り込み (本元側) |
+| `python core/feedback_sync.py push <report_path>` | 1 件の JSON を送信 |
+| `python core/feedback_sync.py list` | inbox 一覧 |
+
+**Sticky-failure flag:** 初回 clone 失敗時に `.claude/state/_feedback_sync_disabled.flag` を立てて以降の試行をスキップする。リポジトリ未作成等のセッション毎警告を抑制する設計。ユーザーが flag を削除すれば再開。
+
+**設計の対比 (erqo-research との違い):**
+- `erqo-research`: 本元 + 全プロジェクトで双方向同期 (各々が読み書き)
+- `erqo-feedback`: プロジェクトのみ push、本元のみ pull (一方向通知)
+
+詳細: `skills/fb/SKILL.md` に配送経路の図あり。
+
 ### session.py — セッション管理
 
 SessionStart Hook から呼ばれる。
@@ -437,5 +464,6 @@ install.py ← dev.py（ヘルパー再利用） / bootstrap.py (--variant=XXX �
 bootstrap.py ← ユーザー (プロジェクト初期化エントリポイント、スタンドアロン) → install.py / bootstrap.py:DIST_FILES が update.py をプロジェクトに配布
 update.py ← ユーザー (.nxt-core/ 再取得エントリポイント、スタンドアロン) → 子プロセスで npx giget + install.py --update
 research_sync.py ← install.py (setup_research_repo → ensure_cloned) / dev.py (cmd_setup 経由) / session.py (auto_pull + missing_clone_warning) / skills/rsrc (auto_push)
-fb/handler.py ← /fb
+feedback_sync.py ← install.py (setup_feedback_shared_repo → ensure_cloned) / dev.py (cmd_setup 経由) / session.py (auto_pull + missing_clone_warning + list_inbox) / feedback.py (push_report)
+fb/handler.py ← /fb (--detail-file PATH 経由でシェル特殊文字も安全に送れる)
 ```

@@ -34,6 +34,9 @@ from constants import (
     QA_CONFIG_TEMPLATES,
     CLAUDE_DIR_NAME,
     CLAUDE_MD_FILENAME,
+    FEEDBACK_REPO_URL,
+    FEEDBACK_SHARED_GITIGNORE_ENTRY,
+    FEEDBACK_SHARED_SHELF_NAME,
     GITIGNORE_FILENAME,
     LIBS_DIR_NAME,
     OS_SKILLS_FILENAME,
@@ -62,16 +65,18 @@ from constants import (
 )
 from feedback import init_error_handling
 from research_sync import ensure_cloned
+from feedback_sync import ensure_cloned as ensure_feedback_cloned
 from variant import read_variant, write_variant
 
 init_error_handling()
 
 # --- モジュール内派生定数 ---
 
-# research は setup_research_repo が git clone で配置するため STANDARD_DIRS から除外する。
+# research / fb-shared は setup_*_repo が git clone で配置するため STANDARD_DIRS から除外する。
 # 空ディレクトリを先に作ってしまうと clone 先として使えなくなるため、必ず分離する。
+_SHELVES_EXCLUDED_FROM_STANDARD = {RESEARCH_SHELF_NAME, FEEDBACK_SHARED_SHELF_NAME}
 STANDARD_DIRS = [
-    *[f"{LIBS_DIR_NAME}/{s}" for s in LIBS_SHELVES if s != RESEARCH_SHELF_NAME],
+    *[f"{LIBS_DIR_NAME}/{s}" for s in LIBS_SHELVES if s not in _SHELVES_EXCLUDED_FROM_STANDARD],
     f"{CLAUDE_DIR_NAME}/{STATE_DIR_NAME}",
     SCRIPTS_DIR_NAME,
     UI_SPECS_DIR_NAME,
@@ -700,6 +705,56 @@ def setup_research_repo(project_root: Path) -> bool:
     return ok
 
 
+def setup_feedback_shared_repo(project_root: Path) -> bool:
+    """フィードバック共有リポジトリ (erqo-feedback) を .libs/fb-shared/ として clone + .gitignore 追記。
+
+    プロジェクト → 本元への一方向通知経路。プロジェクトは push のみ、本元は pull のみ。
+    リポジトリ未作成時は degraded mode (警告のみ、他機能は動作)。
+    setup_research_repo と同じ冪等動作。
+    """
+    # 1. .gitignore に FEEDBACK_SHARED_GITIGNORE_ENTRY を追記
+    gitignore = project_root / GITIGNORE_FILENAME
+    if gitignore.exists():
+        content = gitignore.read_text(encoding="utf-8")
+        entries = {line.strip() for line in content.splitlines()}
+        if FEEDBACK_SHARED_GITIGNORE_ENTRY not in entries:
+            if content and not content.endswith("\n"):
+                content += "\n"
+            content += FEEDBACK_SHARED_GITIGNORE_ENTRY + "\n"
+            gitignore.write_text(content, encoding="utf-8")
+            print(f"  {GITIGNORE_FILENAME}: {FEEDBACK_SHARED_GITIGNORE_ENTRY} 追加")
+
+    # 2. .libs/fb-shared/ の現状に応じて clone 準備
+    shared_dir = project_root / LIBS_DIR_NAME / FEEDBACK_SHARED_SHELF_NAME
+
+    if (shared_dir / ".git").exists():
+        print(f"  {LIBS_DIR_NAME}/{FEEDBACK_SHARED_SHELF_NAME}/: clone 済み (変更なし)")
+        return False
+
+    if shared_dir.exists():
+        if any(shared_dir.iterdir()):
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            backup = shared_dir.parent / f"{FEEDBACK_SHARED_SHELF_NAME}.local-backup-{timestamp}"
+            shutil.move(str(shared_dir), str(backup))
+            print(
+                f"  {LIBS_DIR_NAME}/{FEEDBACK_SHARED_SHELF_NAME}/: 既存 (非 clone) を "
+                f"{backup.name} に退避"
+            )
+        else:
+            shared_dir.rmdir()
+
+    # 3. clone (feedback_sync.ensure_cloned に委譲、失敗は警告のみ)
+    ok = ensure_feedback_cloned(shared_dir)
+    if ok:
+        print(f"  {LIBS_DIR_NAME}/{FEEDBACK_SHARED_SHELF_NAME}/: {FEEDBACK_REPO_URL} から clone")
+    else:
+        print(
+            f"  {LIBS_DIR_NAME}/{FEEDBACK_SHARED_SHELF_NAME}/: clone 失敗 "
+            "(degraded mode: フィードバック配送なしで続行)"
+        )
+    return ok
+
+
 def setup_qa_configs(project_root: Path) -> int:
     """品質チェック設定ファイルをテンプレートから生成する。既存は上書きしない。"""
     if not TEMPLATES_DIR.exists():
@@ -815,6 +870,10 @@ def main() -> None:
     # 6.5. 研究ノート共有リポジトリ (.libs/research/ を erqo-research から clone)
     #      .gitignore が整った後に呼ぶ (RESEARCH_GITIGNORE_ENTRY を追記するため)
     setup_research_repo(project_root)
+
+    # 6.6. フィードバック共有リポジトリ (.libs/fb-shared/ を erqo-feedback から clone)
+    #      未作成時は degraded mode で続行
+    setup_feedback_shared_repo(project_root)
 
     # 7. 品質チェック設定 (新規のみ)
     if not update_mode:

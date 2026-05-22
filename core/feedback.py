@@ -49,7 +49,11 @@ def report_error(exc: BaseException) -> Path:
 
 
 def send_feedback(kind: str, summary: str, detail: str = "") -> Path:
-    """汎用フィードバックを保存する。"""
+    """汎用フィードバックを保存する。
+
+    保存後、erqo-feedback 共有リポジトリへの push も試みる (失敗は警告のみ)。
+    本元では push せず保存のみ (本元は /fb を持たない設計)。
+    """
     data = {
         "kind": kind,
         "summary": summary,
@@ -57,7 +61,14 @@ def send_feedback(kind: str, summary: str, detail: str = "") -> Path:
         "version": _get_nxt_version(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    return _save_report(data)
+    path = _save_report(data)
+    # 共有リポジトリへの push は best-effort (循環 import 回避のため遅延 import)
+    try:
+        from feedback_sync import push_report
+        push_report(path)
+    except Exception as exc:  # noqa: BLE001 (degraded mode: 失敗時は警告のみ)
+        print(f"[feedback] erqo-feedback への push をスキップ: {exc}", file=sys.stderr)
+    return path
 
 
 def init_error_handling() -> None:

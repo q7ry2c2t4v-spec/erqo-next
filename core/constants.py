@@ -27,10 +27,11 @@ CODING_DIR_NAME = "coding"
 # --- .libs/ 配下の棚名 ---
 
 RESEARCH_SHELF_NAME = "research"  # .libs/research/ (erqo-research の clone 先でもある)
+FEEDBACK_SHARED_SHELF_NAME = "fb-shared"  # .libs/fb-shared/ (erqo-feedback の clone 先)
 STORYBOOK_SHELF_NAME = "storybook"
 LIBS_SHELVES = [
-    "design", "features", RESEARCH_SHELF_NAME, "rules", "session-logs",
-    STORYBOOK_SHELF_NAME, "archive",
+    "design", "features", RESEARCH_SHELF_NAME, FEEDBACK_SHARED_SHELF_NAME,
+    "rules", "session-logs", STORYBOOK_SHELF_NAME, "archive",
 ]
 
 # --- ファイル名 ---
@@ -390,6 +391,18 @@ ERQO_REPO_URL = "https://github.com/q7ry2c2t4v-spec/erqo-next.git"
 RESEARCH_REPO_URL = "https://github.com/q7ry2c2t4v-spec/erqo-research.git"
 # 親リポジトリの .gitignore に書き込むエントリ (.libs/research/ を親から除外)
 RESEARCH_GITIGNORE_ENTRY = f"{LIBS_DIR_NAME}/{RESEARCH_SHELF_NAME}/"
+
+# フィードバック共有リポジトリ (.libs/fb-shared/ として本元 + 各プロジェクトに git clone される)
+# プロジェクト側の `/fb` が `inbox/` 配下に JSON を push、本元のセッション開始時に
+# pull + 新着表示。プロジェクト → 本元への一方向通知経路。
+# リポジトリ未作成時は degraded mode (警告のみ、他機能は動作)。
+# SHELF_NAME 自体は LIBS_SHELVES 宣言と一緒に上部で定義済み。
+FEEDBACK_INBOX_DIR_NAME = "inbox"
+FEEDBACK_REPO_URL = "https://github.com/q7ry2c2t4v-spec/erqo-feedback.git"
+FEEDBACK_SHARED_GITIGNORE_ENTRY = f"{LIBS_DIR_NAME}/{FEEDBACK_SHARED_SHELF_NAME}/"
+# フィードバック同期の sticky-failure フラグ (initial 失敗時にこのファイルを置いて
+# 以降のセッションでは sync を試みない。ユーザー側で flag を削除すれば再開)
+FEEDBACK_SYNC_DISABLED_FILENAME = "_feedback_sync_disabled.flag"
 
 # --- セッション関連の数値 ---
 

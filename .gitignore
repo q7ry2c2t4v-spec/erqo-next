@@ -5,3 +5,4 @@ __pycache__/
 .claude/settings.local.json
 .commit_msg_tmp.txt
 .libs/research/
+.libs/fb-shared/

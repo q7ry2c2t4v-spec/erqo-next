@@ -46,6 +46,11 @@ from index import reindex
 from page_parser import parse_sections, parse_tp_row
 from feedback import init_error_handling
 from research_sync import auto_pull as research_auto_pull, missing_clone_warning as research_missing_warning
+from feedback_sync import (
+    auto_pull as feedback_auto_pull,
+    list_inbox as feedback_list_inbox,
+    missing_clone_warning as feedback_missing_warning,
+)
 
 init_error_handling()
 
@@ -338,6 +343,18 @@ def build_normal_context() -> str:
     if research_warn:
         parts.append(research_warn)
 
+    # 2.7. フィードバック共有リポジトリの裏同期 + 本元側で新着 inbox を表示
+    feedback_auto_pull()
+    if IS_SOURCE:
+        inbox_files = feedback_list_inbox()
+        if inbox_files:
+            parts.append("\n## フィードバック新着 (erqo-feedback/inbox/)")
+            for fp in inbox_files:
+                parts.append(f"- {fp.name}")
+    feedback_warn = feedback_missing_warning()
+    if feedback_warn:
+        parts.append(feedback_warn)
+
     # 3. バージョンチェック
     version_msg = check_version()
     if version_msg:
@@ -393,6 +410,11 @@ def build_compact_context() -> str:
     research_warn = research_missing_warning()
     if research_warn:
         parts.append(research_warn)
+
+    # 0.5. フィードバック共有リポジトリの未 clone 警告
+    feedback_warn = feedback_missing_warning()
+    if feedback_warn:
+        parts.append(feedback_warn)
 
     # 1. 中断パイプライン
     interrupted = find_interrupted_pipelines()
