@@ -10,12 +10,13 @@
 
 フロー:
     1. npx giget で `.nxt-core-new-<ts>/` に最新版を取得
-    2. 取得物の sanity check (主要ファイルが揃っているか)
-    3. 現 `.nxt-core/` を `.nxt-core-old-<ts>/` にリネーム (退避)
-    4. 新 `.nxt-core-new-<ts>/` を `.nxt-core/` にリネーム (反映)
-    5. install.py --update を呼んで `.claude/` 側を再同期
-    6. 成功時: 退避した `.nxt-core-old-<ts>/` を削除
-    7. 失敗時: rollback (新規取得分を削除、退避ディレクトリを `.nxt-core/` に戻す)
+    2. 配布対象外 (CLAUDE.md / .libs/ / .claude/ / bootstrap.py 等) を cleanup
+    3. 取得物の sanity check (主要ファイルが揃っているか)
+    4. 現 `.nxt-core/` を `.nxt-core-old-<ts>/` にリネーム (退避)
+    5. 新 `.nxt-core-new-<ts>/` を `.nxt-core/` にリネーム (反映)
+    6. install.py --update を呼んで `.claude/` 側を再同期
+    7. 成功時: 退避した `.nxt-core-old-<ts>/` を削除
+    8. 失敗時: rollback (新規取得分を削除、退避ディレクトリを `.nxt-core/` に戻す)
 
 設計の意図:
     install.py --update は `.claude/` 配下 (Hook / skills / settings)
@@ -54,6 +55,10 @@ FETCHED_MARKER_FILES = (
     "core/constants.py",
     "VERSION",
 )
+# 配布対象ホワイトリスト (bootstrap.py の DIST_DIRS / DIST_FILES と一致)。
+# giget は .gigetignore を尊重しないため、取得後にこれら以外を削除する。
+DIST_DIRS = ("specs", "core", "skills", "stacks")
+DIST_FILES = ("VERSION", "update.py")
 
 
 # --- ヘルパー ---
@@ -89,6 +94,32 @@ def _fetch_new_core(project_root: Path, dst: Path) -> None:
         cwd=str(project_root),
         check=True,
     )
+
+
+def _cleanup_giget_artifacts(nxt_dir: Path) -> None:
+    """giget で取得した `.nxt-core/` から本元固有ファイル/ディレクトリを削除する。
+
+    giget はリポジトリ全体を取得するため、本元の `CLAUDE.md` / `.libs/` /
+    `.claude/` / `bootstrap.py` / `release.sh` / `.gitignore` / `.gigetignore` 等が
+    `.nxt-core/` 配下に混入する。`.nxt-core/CLAUDE.md` が残ると
+    `core/paths.py:find_project_root()` が `IS_SOURCE=True` と誤判定して
+    後続の `install.py --update` が止まるため、ホワイトリスト外を明示的に削除する。
+    """
+    allowed = set(DIST_DIRS) | set(DIST_FILES)
+    removed: list[str] = []
+    for entry in nxt_dir.iterdir():
+        if entry.name in allowed:
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            try:
+                entry.unlink()
+            except OSError:
+                continue
+        removed.append(entry.name)
+    if removed:
+        print(f"  giget 取得物の cleanup: {len(removed)} エントリ削除 ({', '.join(sorted(removed))})")
 
 
 def _verify_fetched_core(new_dir: Path) -> bool:
@@ -171,7 +202,10 @@ def main() -> None:
             shutil.rmtree(new_dir, ignore_errors=True)
         sys.exit(1)
 
-    # 2. sanity check
+    # 2. giget 取得物から本元固有ファイルを削除
+    _cleanup_giget_artifacts(new_dir)
+
+    # 3. sanity check
     if not _verify_fetched_core(new_dir):
         shutil.rmtree(new_dir, ignore_errors=True)
         sys.exit(1)
@@ -180,7 +214,7 @@ def main() -> None:
     print(f"  新バージョン: {new_version}")
     print()
 
-    # 3. 退避 + 切替
+    # 4. 退避 + 切替
     try:
         _swap_in_new_core(nxt_dir, new_dir, old_dir)
     except OSError as exc:
@@ -196,7 +230,7 @@ def main() -> None:
     print(f"  {NXT_CORE_DIR_NAME}/: 取り替え完了 ({old_version} -> {new_version})")
     print()
 
-    # 4. install.py --update で .claude/ 側を再同期
+    # 5. install.py --update で .claude/ 側を再同期
     install_rc = _run_install_update(nxt_dir, project_root)
     if install_rc != 0:
         print(
@@ -207,7 +241,7 @@ def main() -> None:
         )
         sys.exit(install_rc)
 
-    # 5. 旧版を削除
+    # 6. 旧版を削除
     print()
     shutil.rmtree(old_dir, ignore_errors=True)
     print(f"  {old_dir.name}/: 削除完了")

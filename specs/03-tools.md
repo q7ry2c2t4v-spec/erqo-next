@@ -168,13 +168,16 @@ variant に応じて `stacks/<variant>/starter/` をプロジェクトルート�
 フロー:
 
 1. `npx giget gh:q7ry2c2t4v-spec/erqo-next .nxt-core-new-<ts>` で最新版を取得
-2. 取得物の sanity check (`core/paths.py` / `core/install.py` / `core/constants.py` / `VERSION` が揃っているか)
-3. 現 `.nxt-core/` を `.nxt-core-old-<ts>/` にリネーム退避
-4. `.nxt-core-new-<ts>/` を `.nxt-core/` にリネーム反映
-5. `python .nxt-core/core/install.py --update` を子プロセスで呼んで `.claude/` 側を再同期
-6. 成功時: 退避した `.nxt-core-old-<ts>/` を削除 / 失敗時: rollback (新版を消し、退避版を `.nxt-core/` に戻す)
+2. **giget cleanup**: 配布対象外 (`CLAUDE.md` / `.libs/` / `.claude/` / `bootstrap.py` / `release.sh` / `.gitignore` / `.gigetignore` 等) を `.nxt-core-new-<ts>/` から削除
+3. 取得物の sanity check (`core/paths.py` / `core/install.py` / `core/constants.py` / `VERSION` が揃っているか)
+4. 現 `.nxt-core/` を `.nxt-core-old-<ts>/` にリネーム退避
+5. `.nxt-core-new-<ts>/` を `.nxt-core/` にリネーム反映
+6. `python .nxt-core/core/install.py --update` を子プロセスで呼んで `.claude/` 側を再同期
+7. 成功時: 退避した `.nxt-core-old-<ts>/` を削除 / 失敗時: rollback (新版を消し、退避版を `.nxt-core/` に戻す)
 
 **設計の意図:** `install.py --update` は `.claude/` 配下 (Hook / skills / settings / variant.json 等) のみを管理し、`.nxt-core/` 自体は触らない設計。本元での修正を各プロジェクトに届けるには `.nxt-core/` の取り直しが別途必要で、本スクリプトはその空白を埋める。
+
+**giget cleanup の必要性:** giget は対象リポジトリ全体を取得するため、本元固有のファイル (CLAUDE.md / `.libs/` / `.claude/` / `bootstrap.py` 等) も `.nxt-core/` 配下に混入する。特に `.nxt-core/CLAUDE.md` が残ると `core/paths.py:find_project_root()` がそれを先に拾って `IS_SOURCE=True` と誤判定し、後続の `install.py --update` が「本元では実行できません」で停止する。`.gigetignore` は giget が尊重しないため、ホワイトリスト (`DIST_DIRS` + `DIST_FILES`) 外を明示的に削除する方式を採用した。同じロジックを `bootstrap.py:fetch_from_github` にも入れて giget 取得経路を一元的に保護している。
 
 ### dev.py — 本体リポジトリ向けセットアップ
 

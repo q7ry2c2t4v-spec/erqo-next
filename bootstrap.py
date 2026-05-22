@@ -136,6 +136,28 @@ def copy_starter(project_root: Path, starter_src: Path) -> None:
     print("  スターター: テンプレートをコピーしました")
 
 
+def _cleanup_giget_artifacts(nxt_dir: Path) -> None:
+    """giget で取得した .nxt-core/ から本元固有ファイル/ディレクトリを削除する。
+
+    giget はリポジトリ全体を取得するため、本元の CLAUDE.md / .libs/ /
+    .claude/ / bootstrap.py / release.sh / .gitignore / .gigetignore 等が
+    .nxt-core/ 配下に混入する。.nxt-core/CLAUDE.md が残ると core/paths.py の
+    find_project_root() が IS_SOURCE=True と誤判定して install.py / update.py
+    が止まるため、DIST_DIRS と DIST_FILES に含まれないエントリを明示的に削除する。
+    """
+    allowed = set(DIST_DIRS) | set(DIST_FILES)
+    for entry in nxt_dir.iterdir():
+        if entry.name in allowed:
+            continue
+        if entry.is_dir():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            try:
+                entry.unlink()
+            except OSError:
+                pass
+
+
 def copy_nxt_core(project_root: Path, source: Path) -> None:
     """ソースから .nxt-core/ にコアモジュールをコピーする。"""
     nxt_dir = project_root / NXT_CORE_DIR_NAME
@@ -179,6 +201,10 @@ def fetch_from_github(project_root: Path, variant: str) -> None:
     if starter_in_nxt.exists():
         shutil.copytree(starter_in_nxt, project_root, dirs_exist_ok=True)
         shutil.rmtree(starter_in_nxt)
+
+    # 本元固有ファイル (CLAUDE.md / .libs/ / .claude/ / release.sh 等) を .nxt-core/ から削除。
+    # giget は .gigetignore を尊重しないためここで明示的に処理する。
+    _cleanup_giget_artifacts(nxt_dir)
 
     print("  スターター + コア: 配置完了")
 
