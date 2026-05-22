@@ -40,7 +40,9 @@ STARTER_DIR_NAME = "starter"
 # 配布ディレクトリ: stacks/ が入るので docs/ を外した
 # (docs は stacks/nextjs/docs/ に移動済み、stacks/ 経由で届く)
 DIST_DIRS = ("specs", "core", "skills", STACKS_DIR_NAME)
-DIST_FILES = ("VERSION",)
+# update.py は .nxt-core/ 配下に置かれ、後日 `python .nxt-core/update.py` で
+# プロジェクト側から giget 再取得をトリガーするためのエントリポイント。
+DIST_FILES = ("VERSION", "update.py")
 SOURCE_MARKER_FILES = ("core/paths.py", "core/constants.py", "core/install.py")
 GITHUB_REPO = "q7ry2c2t4v-spec/erqo-next"
 INSTALL_SCRIPT_REL = "core/install.py"

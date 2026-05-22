@@ -157,6 +157,25 @@ stacks/        ← variant 別装備
 
 variant に応じて `stacks/<variant>/starter/` をプロジェクトルートに展開する (プル子 = Next.js 雛形、プタ子 = 案内 README のみ)。giget 取得版 (ソースなし) では GitHub から全 `stacks/` を取得後、指定 variant の starter のみを取り出す。`update_package_name` / `install_dependencies` / `install_playwright` は `variant == nextjs` のときだけ実行する。
 
+### update.py — `.nxt-core/` 再取得スクリプト
+
+プロジェクト側で **本元の最新版を取り込む** ための専用エントリポイント。`bootstrap.py` と同じく標準ライブラリのみのスタンドアロン (`core/` 非依存) で、giget を子プロセス呼び出しする。`bootstrap.py:DIST_FILES` 経由で `.nxt-core/update.py` に配布される。
+
+| コマンド | 内容 |
+|---|---|
+| `python .nxt-core/update.py` | `.nxt-core/` を giget 経由で最新版に取り替え、`install.py --update` も自動呼出 |
+
+フロー:
+
+1. `npx giget gh:q7ry2c2t4v-spec/erqo-next .nxt-core-new-<ts>` で最新版を取得
+2. 取得物の sanity check (`core/paths.py` / `core/install.py` / `core/constants.py` / `VERSION` が揃っているか)
+3. 現 `.nxt-core/` を `.nxt-core-old-<ts>/` にリネーム退避
+4. `.nxt-core-new-<ts>/` を `.nxt-core/` にリネーム反映
+5. `python .nxt-core/core/install.py --update` を子プロセスで呼んで `.claude/` 側を再同期
+6. 成功時: 退避した `.nxt-core-old-<ts>/` を削除 / 失敗時: rollback (新版を消し、退避版を `.nxt-core/` に戻す)
+
+**設計の意図:** `install.py --update` は `.claude/` 配下 (Hook / skills / settings / variant.json 等) のみを管理し、`.nxt-core/` 自体は触らない設計。本元での修正を各プロジェクトに届けるには `.nxt-core/` の取り直しが別途必要で、本スクリプトはその空白を埋める。
+
 ### dev.py — 本体リポジトリ向けセットアップ
 
 本体リポジトリ専用。本体で `/wrap`, `/ret` などのスキルを使えるようにする。プロジェクトで実行するとエラー終了する。
@@ -412,7 +431,8 @@ coding_rules_hook.py ← PreToolUse Hook (Write|Edit|NotebookEdit)
 clone.py ← /layo ステップ3,4 (recon/dump/apply/rules) + /codi ステップ2-B (build/assemble/baseline) → clone_node/recon.mjs, clone_node/baseline.mjs, clone_node/diff.mjs, clone_node/spector.mjs, clone_node/time-virtualize.mjs, clone_node/rrweb-record.mjs, clone_node/anim_lib_patterns.json
 variant.py ← install.py (setup_variant / _scan_skills 経由の read_variant)
 install.py ← dev.py（ヘルパー再利用） / bootstrap.py (--variant=XXX で呼び出し) / specs/templates/ から QA 設定を配布 / variant.py から read_variant + write_variant
-bootstrap.py ← ユーザー (プロジェクト初期化エントリポイント、スタンドアロン) → install.py
+bootstrap.py ← ユーザー (プロジェクト初期化エントリポイント、スタンドアロン) → install.py / bootstrap.py:DIST_FILES が update.py をプロジェクトに配布
+update.py ← ユーザー (.nxt-core/ 再取得エントリポイント、スタンドアロン) → 子プロセスで npx giget + install.py --update
 research_sync.py ← install.py (setup_research_repo → ensure_cloned) / dev.py (cmd_setup 経由) / session.py (auto_pull + missing_clone_warning) / skills/rsrc (auto_push)
 fb/handler.py ← /fb
 ```
